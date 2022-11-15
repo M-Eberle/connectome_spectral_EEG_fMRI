@@ -11,10 +11,14 @@ import h5py
 ### last steps
 # - load data
 # - transform data onto graph
-### next steps
 # - check that participant's indices in SC, fMRI, and EEG align
-# - symmetry of SCs? --> directed graph cannot be used for normalized laplacian
-# - compare fMRI & EEG signal ?
+# - symmetry of SCs? --> use +transpose for now
+### next steps
+# - compare fMRI & EEG signal with individual SCs
+#   - plot power over smoothness per participant
+#   - nr. of harmonics needed to recreate fMRI/EEG signal
+#   - compare patterns between participants
+# - compare fMRI & EEG signal with average SC ?
 
 # %%
 SC_path = "../data/empirical_structural_connectomes/SCs.mat"
@@ -35,6 +39,7 @@ EEG_data_file = h5py.File(EEG_data_path, "r")
 
 
 # %%
+ID_count = 0
 # list of SC matrices
 SC_weights = []
 # lists of signal timeseries
@@ -45,9 +50,10 @@ trans_fMRI_timeseries = []
 EEG_timeseries = []
 trans_EEG_timeseries = []
 
+N = 1
 for participant in np.arange(N):
 
-    SC_weights_pre, _participant_ID = SC_data[participant]
+    SC_weights_pre, SC_participant_ID = SC_data[participant]
     # extract weights from nested object
     # make weights symmetric to keep going for now
     # ??
@@ -60,10 +66,14 @@ for participant in np.arange(N):
     G.compute_fourier_basis()  # harmonics in G.U, eigenvalues in G.e
 
     # get participant's fMRI data
-    fMRI_timeseries_curr, _participant_ID = fMRI_data[participant]
+    fMRI_timeseries_curr, fMRI_participant_ID = fMRI_data[participant]
     fMRI_timeseries.append(fMRI_timeseries_curr.T)
 
     # get participant's EEG data
+    EEG_ID_store_curr = EEG_data_file["source_activity/sub_id"][participant][0]
+    EEG_participant_ID = EEG_data_file[EEG_ID_store_curr][:]
+    EEG_participant_ID = "['" + "".join(chr(c[0]) for c in EEG_participant_ID) + "']"
+
     EEG_data_store_curr = EEG_data_file["source_activity/ts"][participant][0]
     EEG_timeseries_curr = EEG_data_file[EEG_data_store_curr]
     EEG_timeseries.append(EEG_timeseries_curr[:, :].T)
@@ -73,13 +83,22 @@ for participant in np.arange(N):
     trans_fMRI_timeseries.append(G.gft(fMRI_timeseries[-1]))
     trans_EEG_timeseries.append(G.gft(EEG_timeseries[-1]))
 
+    if (str(SC_participant_ID) == str(EEG_participant_ID)) and (
+        str(SC_participant_ID) == str(fMRI_participant_ID)
+    ):
+        ID_count += 1
+        if ID_count == N:
+            print(
+                "all participant IDs are represented by the same indices in SC matrix, fMRI, and EEG data"
+            )
+
 # %%
 N, M = trans_fMRI_timeseries[-1].shape
 for i in np.linspace(0, N - 1, 5).astype(int):
     plt.plot(trans_fMRI_timeseries[-1][i, :], label=f"harmonic {i+1}")
 plt.xlabel("time")
 plt.ylabel("signal")
-plt.title("examplary activities for one participant")
+plt.title("examplary fMRI activities for one participant")
 plt.legend()
 plt.show()
 
