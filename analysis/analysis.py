@@ -5,7 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 import scipy.interpolate as interp
+import seaborn as sns
 
+
+# %%
 
 # %% [markdown]
 
@@ -16,11 +19,12 @@ import scipy.interpolate as interp
 # - symmetry of SCs? --> use +transpose for now
 ### next steps
 # - compare fMRI & EEG signal with individual SCs
-#   - plot power over smoothness per participant
-#   - nr. of harmonics needed to recreate fMRI/EEG signal
+#   - plot power over smoothness per participant --> heatmaps from Glomb et al. (2020) Fig. 2
+#   - nr. of harmonics needed to recreate fMRI/EEG signal --> cumulative power from Glomb et al. (2020) Fig. 2
 #   - compare patterns between participants (correlation matrices?)
 # - compare fMRI & EEG signal with average SC
 #   - averaged correlation matrix ?
+#   - plot power over smoothness per participant --> heatmaps from Glomb et al. (2020) Fig. 2
 
 # %%
 SC_path = "../data/empirical_structural_connectomes/SCs.mat"
@@ -38,7 +42,6 @@ fMRI_data = np.ndarray.flatten(unflattened_fMRI_data)
 
 # load EEG data
 EEG_data_file = h5py.File(EEG_data_path, "r")
-
 
 # %%
 ID_count = 0
@@ -79,6 +82,7 @@ for participant in np.arange(N):
     EEG_timeseries_curr = EEG_data_file[EEG_data_store_curr]
     EEG_timeseries.append(EEG_timeseries_curr[:, :].T)
 
+    # spectral representation of signal
     # the Fourier transform is simply calling the .gft() method
     # e.g. G.gft(signal)
     trans_fMRI_timeseries.append(G.gft(fMRI_timeseries[-1]))
@@ -93,46 +97,160 @@ for participant in np.arange(N):
                 "all participant IDs are represented by the same indices in SC matrix, fMRI, and EEG data"
             )
 
+N_regions, fMRI_timesteps = trans_fMRI_timeseries[0].shape
+N_regions, EEG_timesteps = trans_EEG_timeseries[0].shape
+
 # %%
-N, M = trans_fMRI_timeseries[-1].shape
-for i in np.linspace(0, N - 1, 5).astype(int):
-    plt.plot(trans_fMRI_timeseries[-1][i, :], label=f"harmonic {i+1}")
+ex_participant = 4
+for i in np.linspace(0, N_regions - 1, 5).astype(int):
+    plt.plot(trans_fMRI_timeseries[participant][i, :], label=f"harmonic {i+1}")
 plt.xlabel("time")
 plt.ylabel("signal")
 plt.title("examplary fMRI activities for one participant")
 plt.legend()
 plt.show()
 
+for i in np.linspace(0, N_regions - 1, 5).astype(int):
+    plt.plot(trans_EEG_timeseries[participant][i, :], label=f"harmonic {i+1}")
+plt.xlabel("time")
+plt.ylabel("signal")
+plt.title("examplary EEG activities for one participant")
+plt.legend()
+plt.show()
+
+# %%
+ex_participant = 3
+# 10**5 used in paper for same plots
+a = EEG_timeseries[ex_participant] * 10**5
+b = trans_EEG_timeseries[ex_participant] * 10**5
+# activity in original domain
+map = sns.heatmap(a / np.max(a))
+map.set_xlabel("time", fontsize=10)
+map.set_ylabel("brain area", fontsize=10)
+plt.title(
+    f"EEG activity for all brain areas over time for participant {ex_participant+1}"
+)
+plt.show()
+# activity in graph frequency/spectral domain
+map = sns.heatmap(b / np.max(b))
+map.set_xlabel("time", fontsize=10)
+map.set_ylabel("network harmonic", fontsize=10)
+plt.title(
+    f"EEG activity for all network harmonics over time for participant {ex_participant+1}"
+)
+plt.show()
+
+print(
+    "for lower plot, there should be a difference between top and bottom network harmonic activations"
+)
 # %%
 # stretch fMRI data over time
 
-N_regions, fMRI_timesteps = trans_fMRI_timeseries[0].shape
-N_regions, EEG_timesteps = trans_EEG_timeseries[0].shape
+trans_fMRI_interp = []
+for participant in np.arange(N):
+    trans_fMRI_interp_curr = np.empty((N_regions, EEG_timesteps))
+    for region in np.arange(N_regions):
+        fMRI_interp = interp.interp1d(
+            np.arange(fMRI_timesteps), trans_fMRI_timeseries[participant][region, :]
+        )
+        trans_fMRI_interp_curr[region, :] = fMRI_interp(
+            np.linspace(0, fMRI_timesteps - 1, EEG_timesteps)
+        )
+    trans_fMRI_interp.append(trans_fMRI_interp_curr)
 
-# for one participant:
-trans_fMRI_interp = np.empty((N_regions, EEG_timesteps))
-for region in np.arange(N_regions):
-    fMRI_interp = interp.interp1d(
-        np.arange(fMRI_timesteps), trans_fMRI_timeseries[0][region, :]
-    )
-    trans_fMRI_interp[region, :] = fMRI_interp(
-        np.linspace(0, fMRI_timesteps - 1, EEG_timesteps)
-    )
-
+ex_participant = 1
+ex_harmonic = 5
 # exemplary comparison of stretched and original fMRI timeseries data
-plt.plot(trans_fMRI_timeseries[0][5, :])
+plt.plot(trans_fMRI_timeseries[ex_participant][ex_harmonic, :])
+plt.xlabel("time")
+plt.ylabel("signal")
+plt.title("original fMRI signal")
 plt.show()
-plt.plot(trans_fMRI_interp[5, :])
+plt.plot(trans_fMRI_interp[ex_participant][ex_harmonic, :])
+plt.xlabel("time")
+plt.ylabel("signal")
+plt.title("stretched fMRI signal")
 plt.show()
+
 # %%
 # exemplary comparison EEG and fMRI timeseries data
-plt.plot(trans_fMRI_interp[0, :] / np.max(np.abs(trans_fMRI_interp[0, :])), alpha=0.7)
 plt.plot(
-    trans_EEG_timeseries[0][0, 100 : EEG_timesteps - 101]
-    / np.max(np.abs(trans_EEG_timeseries[0][0, 100 : EEG_timesteps - 101])),
+    trans_fMRI_interp[ex_participant][ex_harmonic, :]
+    / np.max(np.abs(trans_fMRI_interp[ex_participant][ex_harmonic, :])),
+    label="fMRI",
     alpha=0.7,
 )
+plt.plot(
+    trans_EEG_timeseries[ex_participant][ex_harmonic, 100 : EEG_timesteps - 101]
+    / np.max(
+        np.abs(
+            trans_EEG_timeseries[ex_participant][ex_harmonic, 100 : EEG_timesteps - 101]
+        )
+    ),
+    label="EEG",
+    alpha=0.7,
+)
+plt.legend()
+plt.xlabel("time")
+plt.ylabel("normalized signal")
+plt.show()
 
+# %%
+def corrcoef2D(A, B):
+    """
+    from https://stackoverflow.com/questions/30143417/computing-the-correlation-coefficient-between-two-multi-dimensional-arrays
+    """
+    # Rowwise mean of input arrays & subtract from input arrays themeselves
+    A_mA = A - A.mean(1)[:, None]
+    B_mB = B - B.mean(1)[:, None]
+
+    # Sum of squares across rows
+    ssA = (A_mA**2).sum(1)
+    ssB = (B_mB**2).sum(1)
+
+    # Finally get corr coeff
+    return np.dot(A_mA, B_mB.T) / np.sqrt(np.dot(ssA[:, None], ssB[None]))
+
+
+a = np.array(([1, 3, 7], [1, 2, 7]))
+b = np.array(([1, 3, 5], [1, 3, 7]))
+
+print(f"a:\n{a}\nb:\n{b}")
+
+print(f"row-wise corr:\n{corrcoef2D(a, b)}")
+
+# %%
+# look at fMRI-EEg timeseries correlation between harmonics
+for participant in np.arange(N):
+    fMRI_EEG_corr = corrcoef2D(
+        trans_fMRI_interp[participant], trans_EEG_timeseries[participant]
+    )
+    map = sns.heatmap(fMRI_EEG_corr)
+    map.set_xlabel("EEG ?", fontsize=10)
+    map.set_ylabel("fMRI ?", fontsize=10)
+    plt.title(
+        f"correlation of harmonics in fMRI and EEG for participant {participant+1}"
+    )
+    plt.show()
+
+# %%
+ex_participant = 3
+plt.plot(np.mean(trans_EEG_timeseries[ex_participant], 1))
+plt.xlabel("harmonic")
+plt.ylabel("signal strength")
+plt.title("mean over time: spectral domain")
+plt.show()
+fig = plt.figure()
+ax = plt.axes(projection="3d")
+ax.contour3D(
+    np.arange(N_regions),
+    np.arange(EEG_timesteps),
+    trans_EEG_timeseries[ex_participant].T,
+    50,
+    cmap="binary",
+)
+ax.set_xlabel("x")
+ax.set_ylabel("y")
 # %%
 def check_symmetric(a, rtol=1e-05, atol=1e-08):
     return np.allclose(a, a.T, rtol=rtol, atol=atol)
