@@ -4,6 +4,7 @@ from pygsp import graphs, filters, plotting, utils
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
+import scipy.interpolate as interp
 
 
 # %% [markdown]
@@ -17,8 +18,9 @@ import h5py
 # - compare fMRI & EEG signal with individual SCs
 #   - plot power over smoothness per participant
 #   - nr. of harmonics needed to recreate fMRI/EEG signal
-#   - compare patterns between participants
-# - compare fMRI & EEG signal with average SC ?
+#   - compare patterns between participants (correlation matrices?)
+# - compare fMRI & EEG signal with average SC
+#   - averaged correlation matrix ?
 
 # %%
 SC_path = "../data/empirical_structural_connectomes/SCs.mat"
@@ -50,7 +52,6 @@ trans_fMRI_timeseries = []
 EEG_timeseries = []
 trans_EEG_timeseries = []
 
-N = 1
 for participant in np.arange(N):
 
     SC_weights_pre, SC_participant_ID = SC_data[participant]
@@ -101,6 +102,36 @@ plt.ylabel("signal")
 plt.title("examplary fMRI activities for one participant")
 plt.legend()
 plt.show()
+
+# %%
+# stretch fMRI data over time
+
+N_regions, fMRI_timesteps = trans_fMRI_timeseries[0].shape
+N_regions, EEG_timesteps = trans_EEG_timeseries[0].shape
+
+# for one participant:
+trans_fMRI_interp = np.empty((N_regions, EEG_timesteps))
+for region in np.arange(N_regions):
+    fMRI_interp = interp.interp1d(
+        np.arange(fMRI_timesteps), trans_fMRI_timeseries[0][region, :]
+    )
+    trans_fMRI_interp[region, :] = fMRI_interp(
+        np.linspace(0, fMRI_timesteps - 1, EEG_timesteps)
+    )
+
+# exemplary comparison of stretched and original fMRI timeseries data
+plt.plot(trans_fMRI_timeseries[0][5, :])
+plt.show()
+plt.plot(trans_fMRI_interp[5, :])
+plt.show()
+# %%
+# exemplary comparison EEG and fMRI timeseries data
+plt.plot(trans_fMRI_interp[0, :] / np.max(np.abs(trans_fMRI_interp[0, :])), alpha=0.7)
+plt.plot(
+    trans_EEG_timeseries[0][0, 100 : EEG_timesteps - 101]
+    / np.max(np.abs(trans_EEG_timeseries[0][0, 100 : EEG_timesteps - 101])),
+    alpha=0.7,
+)
 
 # %%
 def check_symmetric(a, rtol=1e-05, atol=1e-08):
