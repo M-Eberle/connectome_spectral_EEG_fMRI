@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import h5py
 import scipy.interpolate as interp
 import seaborn as sns
+from matplotlib.lines import Line2D
 
 
 # %%
@@ -116,7 +117,7 @@ for participant in np.arange(N):
             print(
                 "all participant IDs are represented by the same indices in SC matrix, fMRI, and EEG data"
             )
-
+# %%
 ex_participant = 1
 ex_harmonic = 5
 # exemplary comparison of stretched and original fMRI timeseries data
@@ -152,29 +153,72 @@ plt.show()
 # %%
 ex_participant = 3
 # 10**5 used in paper for same plots
-a = EEG_timeseries[ex_participant] * 10**5
-b = trans_EEG_timeseries[ex_participant] * 10**5
-# activity in original domain
-map = sns.heatmap(a / np.max(a))
+factor = 10**5
+EEG_activity_scaled = EEG_timeseries[ex_participant] * factor
+EEG_weights_scaled = trans_EEG_timeseries[ex_participant] * factor
+
+# EEG activity in original domain
+map = sns.heatmap(
+    EEG_activity_scaled / np.max(EEG_activity_scaled),
+    cbar_kws={"label": "activity $* 10^5$ [a.u.]"},
+)
 map.set_xlabel("time", fontsize=10)
-map.set_ylabel("brain area", fontsize=10)
+map.set_ylabel("brain region", fontsize=10)
 plt.title(
-    f"EEG activity for all brain areas over time for participant {ex_participant+1}"
+    f"EEG activity for all brain areas over time\n for participant {ex_participant+1}"
 )
 plt.show()
-# activity in graph frequency/spectral domain
-map = sns.heatmap(b / np.max(b))
+# EEG activity in graph frequency/spectral domain
+map = sns.heatmap(
+    EEG_weights_scaled / np.max(EEG_weights_scaled),
+    cbar_kws={"label": "GFT weights $* 10^5$ [a.u.]"},
+)
 map.set_xlabel("time", fontsize=10)
 map.set_ylabel("network harmonic", fontsize=10)
 plt.title(
-    f"EEG activity for all network harmonics over time for participant {ex_participant+1}"
+    f"EEG activity for all network harmonics over time\n for participant {ex_participant+1}"
 )
 plt.show()
-
 print(
     "for lower plot, there should be a difference between top and bottom network harmonic activations"
 )
 
+# %%
+EEG_power = trans_EEG_timeseries[ex_participant] ** 2
+EEG_power_norm = EEG_power / np.sum(EEG_power)
+# normalize power in every timestep
+EEG_power_norm = EEG_power_norm / np.sum(EEG_power_norm, 0)
+
+fMRI_power = trans_fMRI_timeseries[ex_participant] ** 2
+fMRI_power_norm = fMRI_power / np.sum(fMRI_power)
+# normalize power in every timestep
+fMRI_power_norm = fMRI_power_norm / np.sum(fMRI_power_norm, 0)
+
+# activity in original domain
+map = sns.heatmap(
+    EEG_power_norm,
+    cbar_kws={"label": "EEG L2$^2$"},
+)
+map.set_xlabel("time", fontsize=10)
+map.set_ylabel("brain region", fontsize=10)
+plt.title(
+    f"EEG power for all network harmonics over time\n for participant {ex_participant+1}"
+)
+plt.show()
+# activity in graph frequency/spectral domain
+map = sns.heatmap(
+    fMRI_power_norm,
+    cbar_kws={"label": "fMRI L2$^2$"},
+)
+map.set_xlabel("time", fontsize=10)
+map.set_ylabel("network harmonic", fontsize=10)
+plt.title(
+    f"fMRI power for all network harmonics over time\n for participant {ex_participant+1}"
+)
+plt.show()
+print(
+    "for lower plot, there should be a difference between top and bottom network harmonic activations"
+)
 
 # %%
 # exemplary comparison EEG and fMRI timeseries data
@@ -196,7 +240,10 @@ plt.plot(
 )
 plt.legend()
 plt.xlabel("time")
-plt.ylabel("normalized signal")
+plt.ylabel("scaled signal")
+plt.title(
+    f"exemplary comparison of harmonic {ex_harmonic} in EEG and fMRI\n for participant {ex_participant + 1}"
+)
 plt.show()
 
 # %%
@@ -236,25 +283,79 @@ for participant in np.arange(N):
         f"correlation of harmonics in fMRI and EEG for participant {participant+1}"
     )
     plt.show()
-
 # %%
-ex_participant = 3
-plt.plot(np.mean(trans_EEG_timeseries[ex_participant], 1))
+print(EEG_power_norm.shape)
+fMRI_power_norm.shape
+# %%
+sns.heatmap(corrcoef2D(EEG_power_norm, fMRI_power_norm))
+# %%
+ex_participant = 10
+# mean power (L2 norm) over time
+# or sqrt of L2 norm??
+# square in right place?
+
+# does this plot make sense with a mean over time? -> analogous to EEG/fMRI power plots above, otherwise timesteps instead of harmonics are important
+
+# normalize power vector to 1 --> normalize power to 1 at every point in time????
+
+# normalize power at every time point? and then also divide by number of regions?
+temp = trans_EEG_timeseries[ex_participant] ** 2
+temp = np.mean(temp / np.sum(temp, 0)[np.newaxis, :], 1)
+plt.stem(temp)
 plt.xlabel("harmonic")
 plt.ylabel("signal strength")
-plt.title("mean over time: spectral domain")
-plt.show()
-fig = plt.figure()
-ax = plt.axes(projection="3d")
-ax.contour3D(
-    np.arange(N_regions),
-    np.arange(EEG_timesteps),
-    trans_EEG_timeseries[ex_participant].T,
-    50,
-    cmap="binary",
+plt.title(
+    f"normalized graph frequency domain for participant {ex_participant + 1}\n (mean over time, normalized also per timepoint)"
 )
-ax.set_xlabel("x")
-ax.set_ylabel("y")
+plt.show()
+for i in np.arange(50):
+    curr_random = np.random.uniform(0, 1, N_regions)
+    plt.plot(np.cumsum(curr_random) / np.sum(curr_random), color="grey", alpha=0.1)
+plt.plot(np.cumsum(temp), label="SC graph")
+plt.xlabel("harmonic")
+plt.ylabel("cumulative power ?")
+plt.title(
+    f"Power captured cumulatively for participant {ex_participant + 1}\n (mean over time, normalized also per timepoint)"
+)
+handles, labels = plt.gca().get_legend_handles_labels()
+line = Line2D([0], [0], label="random graphs", color="grey", alpha=0.1)
+handles.extend(
+    [
+        line,
+    ]
+)
+plt.legend(handles=handles)
+plt.show()
+"""
+# normalize power only after taking the mean, not per time point?
+t_mean_freq = np.mean(trans_EEG_timeseries[ex_participant] ** 2, 1)
+t_mean_freq_norm = t_mean_freq / np.sum(t_mean_freq)
+plt.stem(t_mean_freq_norm)
+plt.xlabel("harmonic")
+plt.ylabel("signal strength")
+plt.title(
+    f"normalized graph frequency domain for participant {ex_participant + 1} (mean over time)"
+)
+plt.show()
+for i in np.arange(50):
+    curr_random = np.random.uniform(0, 1, N_regions)
+    plt.plot(np.cumsum(curr_random) / np.sum(curr_random), color="grey", alpha=0.1)
+plt.plot(np.cumsum(t_mean_freq_norm), label="SC graph")
+plt.xlabel("harmonic")
+plt.ylabel("cumulative power ?")
+plt.title(
+    f"Power captured cumulatively for participant {ex_participant + 1} (mean over time)"
+)
+handles, labels = plt.gca().get_legend_handles_labels()
+line = Line2D([0], [0], label="random graphs", color="grey", alpha=0.1)
+handles.extend(
+    [
+        line,
+    ]
+)
+plt.legend(handles=handles)
+plt.show()
+"""
 # %%
 def check_symmetric(a, rtol=1e-05, atol=1e-08):
     return np.allclose(a, a.T, rtol=rtol, atol=atol)
