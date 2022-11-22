@@ -176,9 +176,6 @@ def plot_ex_regions_harmonics(timeseries, trans_timeseries, ex_participant, mode
     )
     plt.tight_layout()
     plt.show()
-    print(
-        "for lower plot, there should be a difference between top and bottom network harmonic activations"
-    )
 
 
 def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode):
@@ -234,11 +231,12 @@ def power_mean(signal, ex_participant, mode):
     return power
 
 
-def plot_cum_power(power_mean, mode):
+def plot_cum_power(power_mean, ex_participant, mode):
     """
     plots cumulative power (mean over time) (1 participant, all harmonics)
     arguments:
         power_mean: mean power over time
+        ex_participant: example participant index
         mode: string, should be 'EEG' or 'fMRI'
     """
     N_regions = power_mean.size
