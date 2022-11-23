@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.lines import Line2D
+from scipy import signal as sg
 
 
 def corrcoef2D(A, B):
@@ -360,3 +361,40 @@ def plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant):
         f"correlation of harmonics in fMRI and EEG for participant {ex_participant+1}"
     )
     plt.show()
+
+
+def plot_fft_welch(signal, sampling_freq):
+    """
+    adapted from https://raphaelvallat.com/bandpower.html
+    plot normalized power spectral density (Welch method)
+    arguments:
+        signal: signal data, 1 dimensional
+        sampling_freq: sampling frequency [Hz]
+    """
+    sampling_freq = 200  # Hz
+    time = np.arange(signal.size) / sampling_freq
+
+    # Define window length (4 seconds)
+    win = 2 * sampling_freq
+    freqs, psd = sg.welch(signal, sampling_freq, nperseg=win)
+    psd = psd / np.linalg.norm(psd)
+    plt.plot(freqs[freqs != 0], 1 / freqs[freqs != 0], label="1/f")  # scaling?
+    # plt.semilogy(freqs, psd)
+    plt.plot(freqs, psd)  # scaling?
+    plt.xlabel("frequency [Hz]")
+    plt.ylabel("normalized power spectral density [a.u./Hz ?]")
+    # plt.ylim([0, psd.max() * 1.1])
+    plt.xlim([1, 60])  # cutoff where high-/lowpass filters were applied
+    plt.title("Welch's periodogram")
+    plt.legend()
+    plt.show()
+    return freqs, psd
+
+
+def butter_bandpass_filter(signal, lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = sg.butter(order, [low, high], btype="band")
+    filtered_signal = sg.lfilter(b, a, signal)
+    return filtered_signal

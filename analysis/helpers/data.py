@@ -75,6 +75,8 @@ def get_data_ind_SCs(
 
         EEG_data_store_curr = EEG_data_file["source_activity/ts"][participant][0]
         EEG_timeseries_curr = EEG_data_file[EEG_data_store_curr]
+        # subtract mean over regions ?
+        EEG_timeseries_curr = EEG_timeseries_curr - np.mean(EEG_timeseries_curr, 0)
         EEG_timeseries.append(EEG_timeseries_curr[:, :].T)
 
         # get participant's fMRI data
@@ -86,9 +88,7 @@ def get_data_ind_SCs(
 
         # stretch fMRI data over time to EEG sequence length
         fMRI_interp_curr = np.empty((N_regions, EEG_timesteps))
-
         for region in np.arange(N_regions):
-
             fMRI_interp = interp.interp1d(
                 np.arange(fMRI_timesteps), fMRI_timeseries[-1][region, :]
             )
@@ -196,6 +196,8 @@ def get_data_mean_SC(
 
         EEG_data_store_curr = EEG_data_file["source_activity/ts"][participant][0]
         EEG_timeseries_curr = EEG_data_file[EEG_data_store_curr]
+        # subtract mean over regions ?
+        EEG_timeseries_curr = EEG_timeseries_curr - np.mean(EEG_timeseries_curr, 0)
         EEG_timeseries.append(EEG_timeseries_curr[:, :].T)
 
         # get participant's fMRI data
@@ -207,9 +209,7 @@ def get_data_mean_SC(
 
         # stretch fMRI data over time to EEG sequence length
         fMRI_interp_curr = np.empty((N_regions, EEG_timesteps))
-
         for region in np.arange(N_regions):
-
             fMRI_interp = interp.interp1d(
                 np.arange(fMRI_timesteps), fMRI_timeseries[-1][region, :]
             )

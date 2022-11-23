@@ -1,7 +1,6 @@
 # %%
 from helpers import *
 
-
 # %% [markdown]
 
 ### last steps
@@ -9,14 +8,15 @@ from helpers import *
 # - transform data onto graph
 # - check that participant's indices in SC, fMRI, and EEG align
 # - symmetry of SCs? --> use +transpose for now
+# - interpolate fMRI
+# - look at data
+#   - activity, harmonics, power
+#   - correlations between fMRI & EEG
 ### next steps
-# - compare fMRI & EEG signal with individual SCs
-#   - plot power over smoothness per participant
-#   - nr. of harmonics needed to recreate fMRI/EEG signal --> cumulative power from Glomb et al. (2020) Fig. 2
-#   - compare patterns between participants (correlation matrices?)
-# - compare fMRI & EEG signal with average SC
-#   - averaged correlation matrix ?
-#   - ? plot power over smoothness per participant
+# - sanity checks for EEG data
+# - compare graph vs vertex domain: corr EEG-fMRI
+# - compare timeseries EEG & fMRI (e.g. lower vs higehr half of harmonics)
+# - compare patterns between participants
 #### other ToDos
 # - fix time axis in all plots
 # - save plots
@@ -31,9 +31,9 @@ EEG_data_path = "../data/empirical_source_activity/source_activity.mat"
 ex_participant = 1
 ex_harmonic = 5
 ex_region = 5
+sampling_freq = 200  # Hz, sampling frequency for EEG
 mode = "mean"  # or mean
 
-# %%
 if mode == "ind":
     (
         SC_weights,
@@ -101,7 +101,7 @@ harmonics_corr = ex_EEG_fMRI_corr(
 )
 
 # %%
-# find mean power over all participants ( & over time)
+# restructure data as numpy array
 EEG_power = np.empty((68, N))
 fMRI_power = np.empty((68, N))
 for participant in np.arange(N):
@@ -109,78 +109,56 @@ for participant in np.arange(N):
     fMRI_power[:, participant] = power_mean(trans_fMRI_timeseries, participant, "fMRI")
 
 # %%
-# EEG sanity check 1: EEG cumulative power (mean over time)
+# cumulative power for example participant
+plot_cum_power(EEG_power[:, ex_participant], ex_participant, "EEG")
+plot_cum_power(fMRI_power[:, ex_participant], ex_participant, "fMRI")
+# %%
+# EEG sanity check 1: EEG power, mean over participants
 # ________________________
+# find mean power over all participants ( & over time)
 power_mean_EEG = np.mean(EEG_power, 1)
 power_mean_fMRI = np.mean(fMRI_power, 1)
-# plot titles not correct
-plt.stem(power_mean_EEG)
+# cumulative power, mean over participants (plot titles not correct)
 plot_cum_power(power_mean_EEG, ex_participant, "EEG")
-plt.stem(power_mean_fMRI)
 plot_cum_power(power_mean_fMRI, ex_participant, "fMRI")
-# ___________________________
-
-# %%
-plt.stem(EEG_power[:, ex_participant])
-plot_cum_power(EEG_power[:, ex_participant], ex_participant, "EEG")
-
-plt.stem(fMRI_power[:, ex_participant])
-plot_cum_power(fMRI_power[:, ex_participant], ex_participant, "fMRI")
 
 # %%
 # EEG sanity check 2: EEG frequency band
 # ________________________
-from __future__ import division
-import numpy as np
-import matplotlib.pyplot as plt
+# NO means (separate for each region and participant)
+
+plot_fft_welch(EEG_timeseries[ex_participant][ex_region, :], sampling_freq)
+
+# alpha-activity very prominent
 
 # %%
-# mean over participants
-EEG_t = np.empty((68, 259184, N))
-for participant in np.arange(N):
-    EEG_t[:, :, participant] = EEG_timeseries[participant]
+# EEG sanity check 3: EEG-fMRI
+# ________________________
 
-# %%
-# keep data from all brain regions, concatenate to 1 vector?
-EEG_mean = np.mean(EEG_t, 2).flatten()
-N = len(EEG_mean)
+# filter to alpha band: 8.5-12 Hz
+# maybe repeat for delta (0.1–4 Hz), theta (4.5–8 Hz), beta (12.5–36 Hz), gamma (36.5–100 Hz) bands
+# filter each region for each participant separately
+filtered_EEG = butter_bandpass_filter(EEG_timeseries[ex_participant], 8.5, 12, 200)
 
-# method 1
-dt = 0.0005  # Define the sampling interval
-T = N * dt  # Define the total duration of the data
-xf = np.fft.fft(EEG_mean - EEG_mean.mean())  # Compute Fourier transform of x
-Sxx = 2 * dt**2 / T * (xf * xf.conj())  # Compute spectrum
-Sxx = Sxx[: int(len(EEG_mean) / 2)]  # Ignore negative frequencies
+freqs, psd_before = plot_fft_welch(
+    EEG_timeseries[ex_participant][ex_region, :], sampling_freq
+)
+freqs, psd_filtered = plot_fft_welch(filtered_EEG[ex_region, :], sampling_freq)
+# find spectral profiles corresponding to different frequency band
 
-df = 1 / T  # Determine frequency resolution
-fNQ = 1 / dt / 2  # Determine Nyquist frequency
-faxis = np.arange(0, fNQ, df)  # Construct frequency axis
+# ?
+# find data points that correspond to fMRI data points
+# OR use interpolated fMRI?
 
-plt.plot(faxis, Sxx.real)  # Plot spectrum vs frequency
-plt.xlim([0, 100])  # Select frequency range
-plt.xlabel("Frequency [Hz]")  # Label the axes
-plt.ylabel("Power [$\mu V^2$/Hz]")
-plt.show()
+# Hilbert-Transform for band limited power for all time points
+# OR get spectra for timepoints from before for each volume, then mean over alpha band? (de Munck ?)
+# Hilbert transform (Matlab code, gibt es sicher auch für python): Xanalytic = hilbert(data)
+# pow_env = abs(Xanalytic(11:end-10)) % Anfang und Ende abschneiden wegen transients
+# more info: https://www.gaussianwaves.com/2017/04/extract-envelope-instantaneous-phase-frequency-hilbert-transform/
+# EEG_env = np.abs(sg.hilbert(cnt_flt, axis=1))
 
+# mean for each volume --> power timeseries in same sampling freq as fMRI
 
-# %%
-# method 2
-# Define sampling frequency and time vector
-sf = 200  # Hz
-time = np.arange(EEG_mean.size) / sf
-from scipy import signal
+# for each region, correlate EEG power timeseries with fMRI
 
-# Define window length (4 seconds)
-win = 2 * sf
-freqs, psd = signal.welch(EEG_mean, sf, nperseg=win)
-plt.plot(freqs, 1 / freqs, label="1/f")
-# plt.plot(freqs, psd)
-print(1 / freqs)
-plt.xlabel("Frequency (Hz)")
-plt.ylabel("Power spectral density (V^2 / Hz)")
-plt.ylim([0, psd.max() * 1.1])
-plt.title("Welch's periodogram")
-plt.xlim([0, freqs.max()])
-plt.legend()
-# sns.despine()
-# ___________________________
+# repeat for different time shifts
