@@ -370,6 +370,9 @@ def plot_fft_welch(signal, sampling_freq):
     arguments:
         signal: signal data, 1 dimensional
         sampling_freq: sampling frequency [Hz]
+    returns:
+        freqs: Array of sample frequencies
+        psd: power spectral density of signal
     """
     sampling_freq = 200  # Hz
     time = np.arange(signal.size) / sampling_freq
