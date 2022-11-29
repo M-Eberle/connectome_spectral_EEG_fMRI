@@ -22,12 +22,21 @@ from helpers import *
 # - save plots
 # - plot signal on graph nodes
 # - data in numpy arrays instead of lists
+# - compare scipy.interpolate.interp1d & scipy.signal.resample
 
 # %%
 SC_path = "../data/empirical_structural_connectomes/SCs.mat"
 fMRI_data_path = "../data/empirical_fMRI/empirical_fMRI.mat"
 EEG_data_path = "../data/empirical_source_activity/source_activity.mat"
 
+regionsMap = sio.loadmat("../data/empirical_source_activity/regionsMap.mat")[
+    "regionsMap"
+][:, 0]
+HRF_resEEG = sio.loadmat("../data/HRF_200Hz.mat")[
+    "HRF_resEEG"
+]  # hemodynamic response function
+
+# %%
 ex_participant = 1
 ex_harmonic = 5
 ex_region = 5
@@ -157,7 +166,6 @@ freqs, psd_filtered = plot_fft_welch(filtered_EEG[ex_region, :], sampling_freq)
 # find spectral profiles corresponding to different frequency band
 # %%
 
-# ?
 # find data points that correspond to fMRI data points
 # OR use interpolated fMRI?
 
@@ -175,62 +183,12 @@ freqs, psd_filtered = plot_fft_welch(filtered_EEG[ex_region, :], sampling_freq)
 # repeat for different time shifts
 
 # %%
-def compute_alpha_regressor(source_activity, regionsMap, HRF_resEEG, sampling_freq):
-    """
-    adapted from Schirner et al. (2018) implementation https://github.com/BrainModes/The-Hybrid-Virtual-Brain/blob/master/MATLAB/compute_alpha_regressor.m
-    compute alpha regressor from EEG source activity
-
-    arguments:
-        source_activity: [68 x 259184] matrix containing EEG source activity for 
-                    68 regions and 259184 time points (200 Hz sampling rate)
-        regionsMap: [68 x 1] vector that contains the region sorting of source
-                    activity as outputted by Brainstorm 
-        HRF_resEEG: [1 x 6498] vector that contains the hemodynamic
-                    response function sampled at 200 Hz
-    returns:
-        alpha_reg: struct that contains alpha regressor and filtered
-                    alpha regressor (edges are discarded due to edge 
-                    effects from filtering and from convolution with HRF)
-    """
-
-    # Sorting of Desikan-Killiany atlas regions in SC matrices
-    SCmat_sorting = [1001:1003,1005:1035,2001:2003,2005:2035]
-    
-    #Generate butterworth filter for alpha range and for resting-state
-    # slow oscillations range
-    alpha = np.array((8.5, 12))
-    [b_hi,a_hi]     =   butter(1, alpha/(sampling_freq/2))
-    [b_lo,a_lo]     =   butter(1, [0.1]/((1/1.94)/2))
+alpha_reg, alpha_reg_filt = compute_alpha_regressor(
+    EEG_timeseries, ex_participant, regionsMap, HRF_resEEG, sampling_freq
+)
 
 
-    # Initialize output arrays (shorter than full fMRI time series to
-    # discard edge effects from filtering and convolution with HRF)
-    alpha_reg       =   np.zeros((651,68));    
-    alpha_reg_filt  =   np.zeros((651,68)); 
-    
-    # Iterate over regions
-    for region in np.arange(68):
-        # Get SC matrix sorting
-        regindSAC           =   find(regionsMap==SCmat_sorting(ii))
-        region_ts           =   source_activity(regindSAC,:)
-        
-        # Filter in alpha range
-        region_ts_filt      =   filtfilt(b_hi,a_hi,region_ts)
-        
-        # Hilbert transform to get instantaneous amplitude
-        region_ts_filt_hilb =   hilbert(region_ts_filt)
-        inst_ampl           =   abs(region_ts_filt_hilb)
-        
-        # Convolution with HRF
-        inst_ampl_HRF       =   conv(inst_ampl(100:end-100),HRF_resEEG,'valid')
-        
-        # Downsample to BOLD sampling rate (TR = 1.94 s)
-        alpha_reg(:,ii)     =   downsample(inst_ampl_HRF(100:end-100),388)
-        alpha_reg_filt(:,ii)=   filtfilt(b_lo,a_lo,alpha_reg(:,ii))
-
-
-    # Fill output struct
-    alpha_reg.alpha_reg         = alpha_reg
-    alpha_reg.alpha_reg_filt    = alpha_reg_filt
-
-    return alpha_reg
+# %%
+alpha_timeseries, alpha_timeseries_filt = compute_power_timeseries(
+    EEG_timeseries, ex_participant, regionsMap, sampling_freq
+)
