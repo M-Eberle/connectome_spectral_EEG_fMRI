@@ -42,6 +42,7 @@ def get_data_ind_SCs(
 
     # list of SC matrices
     SC_weights = []
+    Gs = []
     # lists of signal timeseries
     # EEG: 15x (68x259184) for participants x(RegionsxTime)
     EEG_timeseries = []
@@ -65,6 +66,7 @@ def get_data_ind_SCs(
         # save all Graphs?
         G = graphs.Graph(SC_weights[participant], lap_type="normalized")
         G.compute_fourier_basis()  # harmonics in G.U, eigenvalues in G.e
+        Gs.append(G)
 
         # get participant's EEG data
         EEG_ID_store_curr = EEG_data_file["source_activity/sub_id"][participant][0]
@@ -112,6 +114,7 @@ def get_data_ind_SCs(
                     "all participant IDs are represented by the same indices in SC matrix, fMRI, and EEG data"
                 )
     return (
+        Gs,
         SC_weights,
         EEG_timeseries,
         trans_EEG_timeseries,
@@ -140,7 +143,8 @@ def get_data_mean_SC(
         EEG_data_path: path to EEG data file
         fMRI_data_path: path to fMRI data file
     returns:
-        SC_weights: list with SC matrix for each participant
+        mean_SC_weights: mean SC matrix
+        G: graph generated from SC matrix
         EEG_timeseries: list with EEG activity for each participant
         trans_EEG_timeseries: list with EEG GFT weights for each participant
         fMRI_timeseries: list with fMRI activity for each participant
@@ -181,11 +185,11 @@ def get_data_mean_SC(
         SC_weights[:, :, participant] = SC_weights_pre[0, 0][0]
     mean_SC_weights = np.mean(SC_weights, 2)
 
+    # compute one graph for all participants
+    G = graphs.Graph(mean_SC_weights, lap_type="normalized")
+    G.compute_fourier_basis()  # harmonics in G.U, eigenvalues in G.e
+
     for participant in np.arange(N):
-        # compute participant's graph
-        # save all Graphs?
-        G = graphs.Graph(mean_SC_weights, lap_type="normalized")
-        G.compute_fourier_basis()  # harmonics in G.U, eigenvalues in G.e
 
         # get participant's EEG data
         EEG_ID_store_curr = EEG_data_file["source_activity/sub_id"][participant][0]
@@ -233,6 +237,7 @@ def get_data_mean_SC(
                     "all participant IDs are represented by the same indices in SC matrix, fMRI, and EEG data"
                 )
     return (
+        G,
         mean_SC_weights,
         EEG_timeseries,
         trans_EEG_timeseries,

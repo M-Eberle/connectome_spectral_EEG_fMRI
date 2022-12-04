@@ -12,15 +12,18 @@ from helpers import *
 # - look at data
 #   - activity, harmonics, power
 #   - correlations between fMRI & EEG
-### next steps
 # - sanity checks for EEG data
+#   - EEG power, mean over participants
+#   - EEG frequency band
+#   - EEG-fMRI -> alpha regressor, alpha power band vs fMRI timeseries
 # - compare graph vs vertex domain: corr EEG-fMRI
+### next steps
+# - plot signal on graph
 # - compare timeseries EEG & fMRI (e.g. lower vs higehr half of harmonics)
 # - compare patterns between participants
 #### other ToDos
 # - fix time axis in all plots
 # - save plots
-# - plot signal on graph nodes
 # - data in numpy arrays instead of lists
 # - compare scipy.interpolate.interp1d & scipy.signal.resample
 
@@ -36,15 +39,15 @@ HRF_resEEG = sio.loadmat("../data/HRF_200Hz.mat")[
     "HRF_resEEG"
 ]  # hemodynamic response function
 
-# %%
 ex_participant = 1
 ex_harmonic = 5
 ex_region = 5
 sampling_freq = 200  # Hz, sampling frequency for EEG
-mode = "mean"  # or mean
+mode = "ind"  # ind or mean
 
 if mode == "ind":
     (
+        Gs,
         SC_weights,
         EEG_timeseries,
         trans_EEG_timeseries,
@@ -57,7 +60,8 @@ if mode == "ind":
     ) = get_data_ind_SCs(SC_path, EEG_data_path, fMRI_data_path)
 else:
     (
-        SC_weights,
+        G,
+        mean_SC_weights,
         EEG_timeseries,
         trans_EEG_timeseries,
         fMRI_timeseries,
@@ -101,13 +105,21 @@ plot_ex_signal_fMRI_EEG_one(
 )
 
 # %%
-# split into highest vs lowest 15 harmonics & do similarity analysis of correlation matrices?
 regions_corr = ex_EEG_fMRI_corr(
     EEG_timeseries, fMRI_timeseries_interp, ex_participant, "region"
 )
 harmonics_corr = ex_EEG_fMRI_corr(
     trans_EEG_timeseries, trans_fMRI_timeseries, ex_participant, "harmonic"
 )
+print(
+    f"regions: {np.round(np.mean(np.abs(regions_corr)), 4)}, harmonics: {np.round(np.mean(np.abs(harmonics_corr)), 4)}"
+)
+print(
+    f"regions diag: {np.round(np.mean(np.abs(np.diag(regions_corr))), 4)}, harmonics diag: {np.round(np.mean(np.abs(np.diag(harmonics_corr))), 4)}"
+)
+
+# ? test for significance somehow?
+# ? absolute correlation between regions higher than harmonics - even on diagonal
 
 # %%
 # restructure data as numpy array
@@ -121,6 +133,7 @@ for participant in np.arange(N):
 # cumulative power for example participant
 plot_cum_power(EEG_power[:, ex_participant], ex_participant, "EEG")
 plot_cum_power(fMRI_power[:, ex_participant], ex_participant, "fMRI")
+
 # %%
 # EEG sanity check 1: EEG power, mean over participants
 # ________________________
@@ -136,59 +149,136 @@ plot_cum_power(power_mean_fMRI, ex_participant, "fMRI")
 # ________________________
 # NO means (separate for each region and participant)
 
-plot_fft_welch(EEG_timeseries[ex_participant][ex_region, :], sampling_freq)
+freqs, psd = plot_fft_welch(EEG_timeseries[ex_participant][ex_region, :], sampling_freq)
 
 # alpha-activity very prominent
 
 # %%
-# EEG sanity check 3: EEG-fMRI
-# ________________________
-
-# filter to alpha band: 8.5-12 Hz
-# maybe repeat for delta (0.1–4 Hz), theta (4.5–8 Hz), beta (12.5–36 Hz), gamma (36.5–100 Hz) bands
-# filter each region for each participant separately
-filtered_EEG = butter_bandpass_filter(EEG_timeseries[ex_participant], 8.5, 12, 200)
-
-freqs, psd_before = plot_fft_welch(
-    EEG_timeseries[ex_participant][ex_region, :], sampling_freq
-)
-freqs, psd_filtered = plot_fft_welch(filtered_EEG[ex_region, :], sampling_freq)
-# cut out frequency and reverse transform????
-
-
-# BOLD signal can be sufficiently described as the convolution between
-# a linear combination of the power profile within individual frequency bands
-# with a hemodynamic response function (HRF)
-
-# negative correlation between the BOLD signal and the average power time series
-# within the alpha band (8--12 Hz) --> only on some electrodes though and we have regions instead?
-
-# find spectral profiles corresponding to different frequency band
+# EEG sanity check 3: EEG-fMRI -> see helpers/sanity_check.py
+(
+    alpha_reg,
+    alpha_reg_filt,
+    alpha_power,
+    alpha_power_filt,
+    mean_reg_all,
+    mean_power_all,
+    shifts_reg,
+    shifts_power,
+) = alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, regionsMap, HRF_resEEG)
+# very low correlation? -> also, not necessarily negative correlation? sometimes more positive
+# filtered has second filter applied (low?)
 # %%
+plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power)
 
-# find data points that correspond to fMRI data points
-# OR use interpolated fMRI?
 
-# Hilbert-Transform for band limited power for all time points
-# OR get spectra for timepoints from before for each volume, then mean over alpha band? (de Munck ?)
-# Hilbert transform (Matlab code, gibt es sicher auch für python): Xanalytic = hilbert(data)
-# pow_env = abs(Xanalytic(11:end-10)) % Anfang und Ende abschneiden wegen transients
-# more info: https://www.gaussianwaves.com/2017/04/extract-envelope-instantaneous-phase-frequency-hilbert-transform/
-# EEG_env = np.abs(sg.hilbert(filtered_EEG, axis=1))
-
-# mean for each volume --> power timeseries in same sampling freq as fMRI
-
-# for each region, correlate EEG power timeseries with fMRI
-
-# repeat for different time shifts
+# %% [markdown]
+# tests
 
 # %%
-alpha_reg, alpha_reg_filt = compute_alpha_regressor(
-    EEG_timeseries, ex_participant, regionsMap, HRF_resEEG, sampling_freq
-)
+def TV(G, signal):
+    """
+    -> based on Bay-Ahmed et al., 2017
+    Calculates the Total Variation of a signal on a graph normalized by the number of nodes.
+    L2 norm is used.
+    arguments:
+        G: graph (pygsp object)
+        signal: data matrix (nodes x timepoints)
+    returns:
+        TV: total variation
+    """
+    # normalize adjacency matrix
+    # G.W as adjacency?
+    A = G.W  # / np.linalg.norm(G.W)  # produces many nans
+    TV = np.linalg.norm(signal - A @ signal) / G.N
+    return TV
+
+
+def simi_TV(G1, G2, signal1, signal2):
+    """
+    -> based on Bay-Ahmed et al., 2017
+    Calculates the similarity of two graphs & sognals based on their total variations.
+    The similarity measure is based on the interaction between node values (signal) and graph structure.
+    arguments:
+        G1: first graph (pygsp object)
+        G2: second graph (pygsp object)
+        signal1: data matrix for G1 (nodes x timepoints)
+        signal2: data matrix for G2 (nodes x timepoints)
+        q: used for q-norm
+    returns:
+        TVG: similarity measure based on total variation
+    """
+    TVG = np.abs(TV(G1, signal1) - TV(G2, signal2))
+    return TVG
+
+
+def LE(G):
+    """
+    -> based on Bay-Ahmed et al., 2017
+    Calculates Laplacian graph energy.
+    arguments:
+        G: graph (pygsp object)
+    returns:
+        TV: total variation
+    """
+    LE = np.sum(np.abs(G.e - 2 * G.Ne / G.N))
+    return LE
+
+
+def simi_GE(G1, G2):
+    """
+    -> based on Bay-Ahmed et al., 2017
+    Calculates the similarity of two graphs based on their Laplacian graph energy.
+    This similarity measure is based only on the graph (complexity).
+    arguments:
+        G1: first graph (pygsp object)
+        G2: second graph (pygsp object)
+    returns:
+        TVG: similarity measure based on total variation
+    """
+    GE = np.sum(np.abs(LE(G1) - LE(G2)))
+    return GE
+
+
+def simi_JET(G1, G2, signal1, signal2, gamma=0.5):
+    """
+    -> based on Bay-Ahmed et al., 2017
+    Calculates the similarity of two signals and their graphs through the joint difference of
+    the similarity emasure based on the Total Variation and the Laplacian graph energy similarity measure.
+    This similarity measure is based on the interaction between node values (signal) and graph structure, and graph complexity.
+        arguments:
+        G1: first graph (pygsp object)
+        G2: second graph (pygsp object)
+        signal1: data matrix for G1 (nodes x timepoints)
+        signal2: data matrix for G2 (nodes x timepoints)
+        gamma: defines weights of TVG and GE (from [0,1], larger -> more influence of GE)
+    returns:
+        JET: similarity measure
+    """
+
+    TVG = simi_TV(G1, G2, signal1, signal2)
+    GE = simi_GE(G1, G2)
+
+    JET = gamma * GE - (1 - gamma) * TVG
+
+    return JET
 
 
 # %%
-alpha_timeseries, alpha_timeseries_filt = compute_power_timeseries(
-    EEG_timeseries, ex_participant, regionsMap, sampling_freq
-)
+# look at total variation of laplacian graph energy
+for participant in np.arange(N):
+    if mode == "ind":
+        print(
+            f"fMRI: TV: {np.round(TV(Gs[participant], trans_fMRI_timeseries[participant]), 4)}, LE: {np.round(LE(Gs[participant]), 4)}"
+        )
+        print(
+            f"EEG: TV: {np.round(TV(Gs[participant], trans_EEG_timeseries[participant]), 4)}, LE: {np.round(LE(Gs[participant]), 4)}"
+        )
+    else:
+        print(
+            f"fMRI: TV: {np.round(TV(G, trans_fMRI_timeseries[participant]), 4)}, LE: {np.round(LE(G), 4)}"
+        )
+        print(
+            f"fMRI: TV: {np.round(TV(G, trans_EEG_timeseries[participant]), 4)}, LE: {np.round(LE(G), 4)}"
+        )
+
+# ? TV only 0 for EEG data?
