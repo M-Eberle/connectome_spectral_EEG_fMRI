@@ -1,5 +1,8 @@
 # %%
 from helpers import *
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import io as sio
 
 # %% [markdown]
 
@@ -17,8 +20,8 @@ from helpers import *
 #   - EEG frequency band
 #   - EEG-fMRI -> alpha regressor, alpha power band vs fMRI timeseries
 # - compare graph vs vertex domain: corr EEG-fMRI
-### next steps
 # - plot signal on graph
+### next steps
 # - compare timeseries EEG & fMRI (e.g. lower vs higehr half of harmonics)
 # - compare patterns between participants
 #### other ToDos
@@ -39,6 +42,18 @@ HRF_resEEG = sio.loadmat("../data/HRF_200Hz.mat")[
     "HRF_resEEG"
 ]  # hemodynamic response function
 
+coords_all = sio.loadmat("../data/ROI_coords.mat")["ROI_coords"]
+coords_labels = sio.loadmat("../data/ROI_coords.mat")["all_labels"].flatten()
+roi_IDs = np.hstack(
+    sio.loadmat("../data/empirical_fMRI/empirical_fMRI.mat")["freesurfer_roi_IDs"][
+        0
+    ].flatten()
+).astype("int32")
+idx_rois = np.empty((len(roi_IDs)), dtype="int32")
+for idx, roi in enumerate(roi_IDs):
+    idx_rois[idx] = np.argwhere(coords_labels == roi)
+coords = coords_all[idx_rois]
+
 ex_participant = 1
 ex_harmonic = 5
 ex_region = 5
@@ -57,7 +72,7 @@ if mode == "ind":
         N,
         N_regions,
         EEG_timesteps,
-    ) = get_data_ind_SCs(SC_path, EEG_data_path, fMRI_data_path)
+    ) = get_data_ind_SCs(SC_path, EEG_data_path, fMRI_data_path, coords)
 else:
     (
         G,
@@ -70,7 +85,7 @@ else:
         N,
         N_regions,
         EEG_timesteps,
-    ) = get_data_mean_SC(SC_path, EEG_data_path, fMRI_data_path)
+    ) = get_data_mean_SC(SC_path, EEG_data_path, fMRI_data_path, coords)
 
 N = len(trans_EEG_timeseries)
 plot_ex_interp(fMRI_timeseries, fMRI_timeseries_interp, ex_participant, ex_harmonic)
@@ -88,14 +103,6 @@ plot_ex_regions_harmonics(EEG_timeseries, trans_EEG_timeseries, ex_participant, 
 plot_ex_regions_harmonics(
     fMRI_timeseries_interp, trans_fMRI_timeseries, ex_participant, "fMRI"
 )
-
-# %%
-EEG_power_norm = power_norm(trans_EEG_timeseries, ex_participant)
-fMRI_power_norm = power_norm(trans_fMRI_timeseries, ex_participant)
-
-plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant)
-plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant)
-
 # %%
 plot_ex_signal_fMRI_EEG_one(
     EEG_timeseries, fMRI_timeseries_interp, ex_participant, ex_region, "region"
@@ -103,6 +110,15 @@ plot_ex_signal_fMRI_EEG_one(
 plot_ex_signal_fMRI_EEG_one(
     trans_EEG_timeseries, trans_fMRI_timeseries, ex_participant, ex_harmonic, "harmonic"
 )
+# %%
+plot_ex_graphs_3D(Gs, trans_EEG_timeseries, ex_participant, "EEG")
+plot_ex_graphs_3D(Gs, trans_fMRI_timeseries, ex_participant, "fMRI")
+
+# %%
+EEG_power_norm = power_norm(trans_EEG_timeseries, ex_participant)
+fMRI_power_norm = power_norm(trans_fMRI_timeseries, ex_participant)
+plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant)
+plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant)
 
 # %%
 regions_corr = ex_EEG_fMRI_corr(
@@ -169,102 +185,13 @@ freqs, psd = plot_fft_welch(EEG_timeseries[ex_participant][ex_region, :], sampli
 # filtered has second filter applied (low?)
 # %%
 plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power)
-
+# __________________
 
 # %% [markdown]
-# tests
+# measures
 
 # %%
-def TV(G, signal):
-    """
-    -> based on Bay-Ahmed et al., 2017
-    Calculates the Total Variation of a signal on a graph normalized by the number of nodes.
-    L2 norm is used.
-    arguments:
-        G: graph (pygsp object)
-        signal: data matrix (nodes x timepoints)
-    returns:
-        TV: total variation
-    """
-    # normalize adjacency matrix
-    # G.W as adjacency?
-    A = G.W  # / np.linalg.norm(G.W)  # produces many nans
-    TV = np.linalg.norm(signal - A @ signal) / G.N
-    return TV
-
-
-def simi_TV(G1, G2, signal1, signal2):
-    """
-    -> based on Bay-Ahmed et al., 2017
-    Calculates the similarity of two graphs & sognals based on their total variations.
-    The similarity measure is based on the interaction between node values (signal) and graph structure.
-    arguments:
-        G1: first graph (pygsp object)
-        G2: second graph (pygsp object)
-        signal1: data matrix for G1 (nodes x timepoints)
-        signal2: data matrix for G2 (nodes x timepoints)
-        q: used for q-norm
-    returns:
-        TVG: similarity measure based on total variation
-    """
-    TVG = np.abs(TV(G1, signal1) - TV(G2, signal2))
-    return TVG
-
-
-def LE(G):
-    """
-    -> based on Bay-Ahmed et al., 2017
-    Calculates Laplacian graph energy.
-    arguments:
-        G: graph (pygsp object)
-    returns:
-        TV: total variation
-    """
-    LE = np.sum(np.abs(G.e - 2 * G.Ne / G.N))
-    return LE
-
-
-def simi_GE(G1, G2):
-    """
-    -> based on Bay-Ahmed et al., 2017
-    Calculates the similarity of two graphs based on their Laplacian graph energy.
-    This similarity measure is based only on the graph (complexity).
-    arguments:
-        G1: first graph (pygsp object)
-        G2: second graph (pygsp object)
-    returns:
-        TVG: similarity measure based on total variation
-    """
-    GE = np.sum(np.abs(LE(G1) - LE(G2)))
-    return GE
-
-
-def simi_JET(G1, G2, signal1, signal2, gamma=0.5):
-    """
-    -> based on Bay-Ahmed et al., 2017
-    Calculates the similarity of two signals and their graphs through the joint difference of
-    the similarity emasure based on the Total Variation and the Laplacian graph energy similarity measure.
-    This similarity measure is based on the interaction between node values (signal) and graph structure, and graph complexity.
-        arguments:
-        G1: first graph (pygsp object)
-        G2: second graph (pygsp object)
-        signal1: data matrix for G1 (nodes x timepoints)
-        signal2: data matrix for G2 (nodes x timepoints)
-        gamma: defines weights of TVG and GE (from [0,1], larger -> more influence of GE)
-    returns:
-        JET: similarity measure
-    """
-
-    TVG = simi_TV(G1, G2, signal1, signal2)
-    GE = simi_GE(G1, G2)
-
-    JET = gamma * GE - (1 - gamma) * TVG
-
-    return JET
-
-
-# %%
-# look at total variation of laplacian graph energy
+# look at total variation and laplacian graph energy
 for participant in np.arange(N):
     if mode == "ind":
         print(
@@ -282,3 +209,41 @@ for participant in np.arange(N):
         )
 
 # ? TV only 0 for EEG data?
+
+# %%
+# for fMRI: compare TV between all p[articipants]
+def TV(G, signal):
+    """
+    -> based on Bay-Ahmed et al., 2017
+    Calculates the Total Variation of a signal on a graph normalized by the number of nodes.
+    Degree-normalized adjacency matrix and L2 norm are used.
+    arguments:
+        G: graph (pygsp object)
+        signal: data matrix (nodes x timepoints)
+    returns:
+        TV: total variation
+    """
+    # normalize adjacency matrix
+    A = normalize_adjacency(G.W)
+    TV = np.linalg.norm(signal - A @ signal) / G.N
+    return TV
+
+
+fMRI_TVGs = np.empty((N, N))
+for participant1 in np.arange(N):
+    for participant2 in np.arange(N):
+        if participant1 <= participant2:
+            fMRI_TVGs[participant1, participant2] = simi_TV(
+                Gs[participant1],
+                Gs[participant2],
+                trans_fMRI_timeseries[participant1],
+                trans_fMRI_timeseries[participant2],
+            )
+        else:
+            fMRI_TVGs[participant1, participant2] = fMRI_TVGs[
+                participant2, participant1
+            ]
+
+sns.heatmap(fMRI_TVGs)
+
+# use unnormalized adjacency to compare EEG & fMRI for now?

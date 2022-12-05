@@ -308,7 +308,7 @@ def power_norm(trans_timeseries, ex_participant):
 
 def plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant):
     """
-    plots exemplary power for EEG and FMRI time (for 1 participant, all harmonics)
+    plots exemplary power for EEG and fMRI time (for 1 participant, all harmonics)
     arguments:
         EEG_power_norm: EEG power matrix
         fMRI_power_norm: fMRI power matrix
@@ -316,18 +316,18 @@ def plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant):
     """
 
     plt.subplot(211)
-    # activity in original domain
+    # EEG power
     map = sns.heatmap(
         EEG_power_norm,
         cbar_kws={"label": "EEG L2$^2$"},
     )
     map.set_xlabel("time", fontsize=10)
-    map.set_ylabel("brain region", fontsize=10)
+    map.set_ylabel("network harmonic", fontsize=10)
     plt.title(
         f"EEG power for all network harmonics over time\n for participant {ex_participant+1}"
     )
     plt.subplot(212)
-    # activity in graph frequency/spectral domain
+    # fMRI power
     map = sns.heatmap(
         fMRI_power_norm,
         cbar_kws={"label": "fMRI L2$^2$"},
@@ -391,3 +391,34 @@ def plot_fft_welch(signal, sampling_freq):
     plt.legend()
     plt.show()
     return freqs, psd
+
+
+# plot brain surfaces
+def plot_ex_graphs_3D(Gs, trans_timeseries, ex_participant, mode):
+    """
+    Plots signal on graph (1 participant, all harmonics, 1 timepoint).
+    arguments:
+        Gs: list of graphs (pygsp)
+        trans_timeseries: list of GFT weight matrices
+        ex_participant: example participant index
+        mode: string, should be 'EEG' or 'fMRI'
+    """
+    timesteps = len(trans_timeseries[ex_participant].T)
+    N_plots = 3
+    stepsize = int(timesteps / N_plots)
+
+    fig, axes = plt.subplots(
+        1, N_plots, figsize=(10, 3), subplot_kw=dict(projection="3d")
+    )
+    for t, ax in enumerate(axes):
+        Gs[ex_participant].plot_signal(
+            trans_timeseries[ex_participant][:, stepsize * t],
+            vertex_size=30,
+            show_edges=True,
+            ax=ax,
+            colorbar=False,
+        )
+        ax.set_title(f"timepoint {stepsize * t + 1}")
+        ax.axis("off")
+        plt.suptitle(f"{mode}: participant {ex_participant}")
+    fig.tight_layout()

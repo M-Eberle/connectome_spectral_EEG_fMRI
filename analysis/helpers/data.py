@@ -5,11 +5,7 @@ import h5py
 import scipy.interpolate as interp
 
 
-def get_data_ind_SCs(
-    SC_path,
-    EEG_data_path,
-    fMRI_data_path,
-):
+def get_data_ind_SCs(SC_path, EEG_data_path, fMRI_data_path, coords):
     """
     SC matrices, EEG and fMRI timeseries from ‘Hybrid Brain Model data’ in data folder
     are extracted for all participants.
@@ -64,7 +60,7 @@ def get_data_ind_SCs(
 
         # compute participant's graph
         # save all Graphs?
-        G = graphs.Graph(SC_weights[participant], lap_type="normalized")
+        G = graphs.Graph(SC_weights[participant], lap_type="normalized", coords=coords)
         G.compute_fourier_basis()  # harmonics in G.U, eigenvalues in G.e
         Gs.append(G)
 
@@ -104,6 +100,7 @@ def get_data_ind_SCs(
         # e.g. G.gft(signal)
         trans_EEG_timeseries.append(G.gft(EEG_timeseries[-1]))
         trans_fMRI_timeseries.append(G.gft(fMRI_timeseries_interp[-1]))
+        # trans_fMRI_timeseries.append(G.gft(fMRI_timeseries[-1])) # for comparison: power stronger also high for low harmonics
 
         if (str(SC_participant_ID) == str(EEG_participant_ID)) and (
             str(SC_participant_ID) == str(fMRI_participant_ID)
@@ -127,11 +124,7 @@ def get_data_ind_SCs(
     )
 
 
-def get_data_mean_SC(
-    SC_path,
-    EEG_data_path,
-    fMRI_data_path,
-):
+def get_data_mean_SC(SC_path, EEG_data_path, fMRI_data_path, coords):
     """
     SC matrices, EEG and fMRI timeseries from ‘Hybrid Brain Model data’ in data folder
     are extracted for all participants.
@@ -186,7 +179,7 @@ def get_data_mean_SC(
     mean_SC_weights = np.mean(SC_weights, 2)
 
     # compute one graph for all participants
-    G = graphs.Graph(mean_SC_weights, lap_type="normalized")
+    G = graphs.Graph(mean_SC_weights, lap_type="normalized", coords=coords)
     G.compute_fourier_basis()  # harmonics in G.U, eigenvalues in G.e
 
     for participant in np.arange(N):

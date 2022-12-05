@@ -4,7 +4,7 @@ import seaborn as sns
 from scipy import signal as sg
 import matplotlib.cm as mcm
 
-from helpers.other import corrcoef2D
+from helpers.overview_plots import corrcoef2D
 
 #%% [markdown]
 # EEG sanity check 3: EEG-fMRI
