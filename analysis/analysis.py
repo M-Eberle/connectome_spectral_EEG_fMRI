@@ -3,6 +3,7 @@ from helpers import *
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import io as sio
+from scipy.stats import ttest_ind
 
 # %% [markdown]
 
@@ -21,14 +22,15 @@ from scipy import io as sio
 #   - EEG-fMRI -> alpha regressor, alpha power band vs fMRI timeseries
 # - compare graph vs vertex domain: corr EEG-fMRI
 # - plot signal on graph
+# - compare patterns between participants
 ### next steps
 # - compare timeseries EEG & fMRI (e.g. lower vs higehr half of harmonics)
-# - compare patterns between participants
 #### other ToDos
 # - fix time axis in all plots
 # - save plots
 # - data in numpy arrays instead of lists
 # - compare scipy.interpolate.interp1d & scipy.signal.resample
+# - general refactoring
 
 # %%
 SC_path = "../data/empirical_structural_connectomes/SCs.mat"
@@ -121,23 +123,6 @@ plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant)
 plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant)
 
 # %%
-regions_corr = ex_EEG_fMRI_corr(
-    EEG_timeseries, fMRI_timeseries_interp, ex_participant, "region"
-)
-harmonics_corr = ex_EEG_fMRI_corr(
-    trans_EEG_timeseries, trans_fMRI_timeseries, ex_participant, "harmonic"
-)
-print(
-    f"regions: {np.round(np.mean(np.abs(regions_corr)), 4)}, harmonics: {np.round(np.mean(np.abs(harmonics_corr)), 4)}"
-)
-print(
-    f"regions diag: {np.round(np.mean(np.abs(np.diag(regions_corr))), 4)}, harmonics diag: {np.round(np.mean(np.abs(np.diag(harmonics_corr))), 4)}"
-)
-
-# ? test for significance somehow?
-# ? absolute correlation between regions higher than harmonics - even on diagonal
-
-# %%
 # restructure data as numpy array
 EEG_power = np.empty((68, N))
 fMRI_power = np.empty((68, N))
@@ -163,10 +148,10 @@ plot_cum_power(power_mean_fMRI, ex_participant, "fMRI")
 # %%
 # EEG sanity check 2: EEG frequency band
 # ________________________
-# NO means (separate for each region and participant)
 
-freqs, psd = plot_fft_welch(EEG_timeseries[ex_participant][ex_region, :], sampling_freq)
-
+# freqs, psd = plot_fft_welch(EEG_timeseries[ex_participant][ex_region, :], sampling_freq)
+# use all EEG data instead
+freqs, psd = plot_fft_welch(np.array(EEG_timeseries).flatten(), sampling_freq)
 # alpha-activity very prominent
 
 # %%
@@ -188,62 +173,92 @@ plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power)
 # __________________
 
 # %% [markdown]
-# measures
+# test hypotheses
+# %%
+# compare vertex vs graph domain: correlation between EEG & fMRI
+mean_regions_corrs, mean_harmonics_corrs, ttest_results = vertex_vs_graph(
+    EEG_timeseries, fMRI_timeseries_interp, trans_EEG_timeseries, trans_fMRI_timeseries
+)
 
 # %%
-# look at total variation and laplacian graph energy
-for participant in np.arange(N):
-    if mode == "ind":
-        print(
-            f"fMRI: TV: {np.round(TV(Gs[participant], trans_fMRI_timeseries[participant]), 4)}, LE: {np.round(LE(Gs[participant]), 4)}"
-        )
-        print(
-            f"EEG: TV: {np.round(TV(Gs[participant], trans_EEG_timeseries[participant]), 4)}, LE: {np.round(LE(Gs[participant]), 4)}"
-        )
-    else:
-        print(
-            f"fMRI: TV: {np.round(TV(G, trans_fMRI_timeseries[participant]), 4)}, LE: {np.round(LE(G), 4)}"
-        )
-        print(
-            f"fMRI: TV: {np.round(TV(G, trans_EEG_timeseries[participant]), 4)}, LE: {np.round(LE(G), 4)}"
-        )
+# compare similarity measures between all p[articipants]
+simi_betw_participants(Gs, simi_TVG, "TVG", "fMRI", trans_fMRI_timeseries)
+simi_betw_participants(Gs, simi_TVG, "TVG", "EEG", trans_EEG_timeseries)
+# scale for EEG a lot smaller than for fMRI
 
-# ? TV only 0 for EEG data?
+simi_betw_participants(Gs, simi_GE, "GE")
+
+simi_betw_participants(Gs, simi_JET, "JET", "fMRI", trans_fMRI_timeseries)
+simi_betw_participants(Gs, simi_JET, "JET", "EEG", trans_EEG_timeseries)
 
 # %%
-# for fMRI: compare TV between all p[articipants]
-def TV(G, signal):
+# compare lower vs upper half of harmonics
+N_regions = len(trans_fMRI_timeseries[0])
+half = int(N_regions / 2)
+# instead of GFT with all harmonics
+
+
+def power_mean(
+    signal,
+    ex_participant,
+    mode,
+    low_harm=0,
+    high_harm=68,
+):
     """
-    -> based on Bay-Ahmed et al., 2017
-    Calculates the Total Variation of a signal on a graph normalized by the number of nodes.
-    Degree-normalized adjacency matrix and L2 norm are used.
+    plots mean power over time (1 participant, all harmonics)
     arguments:
-        G: graph (pygsp object)
-        signal: data matrix (nodes x timepoints)
-    returns:
-        TV: total variation
+        signal: GFT weights
+        ex_participant: example participant index
+        mode: string, should be 'EEG' or 'fMRI'
+    return:
+        power: power per harmonic
     """
-    # normalize adjacency matrix
-    A = normalize_adjacency(G.W)
-    TV = np.linalg.norm(signal - A @ signal) / G.N
-    return TV
+    # mean power (L2 norm) over time
+    # or sqrt of L2 norm??
+    # square in right place?
+    # does this make sense with a mean over time? -> analogous to EEG/fMRI power plots above, otherwise timesteps instead of harmonics are important
+    # normalize power vector to 1 --> normalize power to 1 at every point in time????
+    # normalize power at every time point? and then also divide by number of regions?
+    power = signal[ex_participant][low_harm:high_harm, :] ** 2
+    power = np.mean(power / np.sum(power, 0)[np.newaxis, :], 1)
+    print("mean")
+    print(power)
+    plt.stem(power)
+    plt.xlabel("harmonic")
+    plt.ylabel("signal strength")
+    plt.title(
+        f"{mode} normalized graph frequency domain for participant {ex_participant + 1}\n (mean over time, normalized also per timepoint)"
+    )
+    plt.show()
+    return power
 
 
-fMRI_TVGs = np.empty((N, N))
-for participant1 in np.arange(N):
-    for participant2 in np.arange(N):
-        if participant1 <= participant2:
-            fMRI_TVGs[participant1, participant2] = simi_TV(
-                Gs[participant1],
-                Gs[participant2],
-                trans_fMRI_timeseries[participant1],
-                trans_fMRI_timeseries[participant2],
-            )
-        else:
-            fMRI_TVGs[participant1, participant2] = fMRI_TVGs[
-                participant2, participant1
-            ]
+fMRI_power_low = power_mean(trans_fMRI_timeseries, ex_participant, "fMRI", 0, half)
+fMRI_power_high = power_mean(
+    trans_fMRI_timeseries, ex_participant, "fMRI", half, N_regions
+)
 
-sns.heatmap(fMRI_TVGs)
 
-# use unnormalized adjacency to compare EEG & fMRI for now?
+def ttest_greater(a, b, context):
+    tick_labels, y_label, title = context
+    means = (np.mean(a), np.mean(b))
+    stds = (np.std(a), np.std(b))
+    plt.bar(
+        (1, 2),
+        means,
+        yerr=stds,
+        capsize=10,
+        tick_label=tick_labels,
+    )
+    plt.ylabel(y_label)
+    plt.title(title)
+    results = ttest_ind(a, b, alternative="greater")
+    return results
+
+
+ttest_greater(
+    fMRI_power_low,
+    fMRI_power_high,
+    [["low", "high"], "power", "power between lower and higher harmonics"],
+)

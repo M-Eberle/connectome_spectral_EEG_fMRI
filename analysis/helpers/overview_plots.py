@@ -178,7 +178,7 @@ def plot_ex_regions_harmonics(timeseries, trans_timeseries, ex_participant, mode
     plt.show()
 
 
-def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode):
+def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode, plot=False):
     """
     plots correlation between EEG and fMRI signal (1 participant, all regions/harmonics)
     arguments:
@@ -192,17 +192,24 @@ def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode):
     fMRI_EEG_corr = corrcoef2D(
         fMRI_timeseries[ex_participant], EEG_timeseries[ex_participant]
     )
-    map = sns.heatmap(fMRI_EEG_corr)
-    map.set_xlabel("EEG ?", fontsize=10)
-    map.set_ylabel("fMRI ?", fontsize=10)
-    plt.title(
-        f"correlation of {mode}s in fMRI and EEG for participant {ex_participant+1}"
-    )
-    plt.show()
+    if plot == True:
+        map = sns.heatmap(fMRI_EEG_corr)
+        map.set_xlabel("EEG ?", fontsize=10)
+        map.set_ylabel("fMRI ?", fontsize=10)
+        plt.title(
+            f"correlation of {mode}s in fMRI and EEG for participant {ex_participant+1}"
+        )
+        plt.show()
     return fMRI_EEG_corr
 
 
-def power_mean(signal, ex_participant, mode):
+def power_mean(
+    signal,
+    ex_participant,
+    mode,
+    low_harm=0,
+    high_harm=68,
+):
     """
     plots mean power over time (1 participant, all harmonics)
     arguments:
@@ -218,9 +225,10 @@ def power_mean(signal, ex_participant, mode):
     # does this make sense with a mean over time? -> analogous to EEG/fMRI power plots above, otherwise timesteps instead of harmonics are important
     # normalize power vector to 1 --> normalize power to 1 at every point in time????
     # normalize power at every time point? and then also divide by number of regions?
-    power = signal[ex_participant] ** 2
+    power = signal[ex_participant][low_harm:high_harm, :] ** 2
     power = np.mean(power / np.sum(power, 0)[np.newaxis, :], 1)
-
+    print("mean")
+    print(np.mean(power))
     plt.stem(power)
     plt.xlabel("harmonic")
     plt.ylabel("signal strength")

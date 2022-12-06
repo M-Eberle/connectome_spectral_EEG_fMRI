@@ -101,7 +101,9 @@ def compute_alpha_regressor(
     for region in np.arange(68):
         # Get SC matrix sorting
         regindSAC = np.argwhere(regionsMap == SCmat_sorting[region])
-        region_ts = source_activity[regindSAC, :]
+        # no sorting???? because I correlate with unsorted data??
+        # region_ts = source_activity[regindSAC, :]
+        region_ts = source_activity[region, :]
 
         # Filter in alpha range
         # Zero-phase digital filtering, padlen changes from matlab to python
@@ -295,7 +297,7 @@ def plot_alpha_reg_power_fMRI(
     plt.xlabel("time")
     plt.ylabel("normalized values")
     plt.title(
-        f"comparison of EEG {mode} and fMRI\nfor participant {ex_participant} and region {best_region}"
+        f"comparison of EEG {mode} and fMRI\nfor participant {ex_participant+ 1} and region {best_region}"
     )
     plt.show()
 
@@ -366,7 +368,11 @@ def alpha_mean_corrs(
             corr_reg = np.diagonal(
                 corrcoef2D(fMRI_curr[:, s : uncut - (max_shift - s)], alpha_reg_filt)
             )
+            # plot corr_reg
+
             # ? take mean over all region correlations
+            # np.abs before mean
+            # transform arctanh? / fischer z transform
             mean_reg = np.mean(corr_reg)
 
             if np.abs(mean_reg) > np.abs(mean_reg_all[participant]):
@@ -440,20 +446,22 @@ def plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power):
     cm = mcm.get_cmap("RdYlBu")
     colors = [cm(1.0 * i / N) for i in range(N)]
 
-    plt.scatter(mean_reg_all, mean_power_all, c=colors)
+    plt.scatter(mean_reg_all, mean_power_all, c=colors, edgecolors="black")
+    plt.axhline(y=0.0, color="r", linestyle="--", alpha=0.7)
+    plt.axvline(x=0.0, color="r", linestyle="--", alpha=0.7)
+    ymin, ymax = plt.gca().get_ylim()
+    xmin, xmax = plt.gca().get_xlim()
+    plt.fill_between([xmin, 0], ymin, 0, alpha=0.1, color="green")  # blue
     plt.xlabel("alpha regressor")
     plt.ylabel("alpha band power")
     plt.title(
         "comparison of mean correlations between fMRI and\nEEG alpha regressor vs band power for all participants"
     )
     plt.show()
-    plt.scatter(shifts_reg, shifts_power, c=colors)
+    plt.scatter(shifts_reg, shifts_power, c=colors, edgecolors="black")
     plt.xlabel("alpha regressor")
     plt.ylabel("alpha band power")
     plt.title(
         "comparison of chosen shift for correlation between fMRI and\nEEG alpha regressor vs band power for all participants"
     )
     plt.show()
-
-
-# %%
