@@ -32,10 +32,20 @@ def vertex_vs_graph(
         fMRI_timeseries: fMRI activity timeseries (same length as EEG timeseries), vertex domain
         trans_EEG_timeseries: EEG gft weights timeseries, graph domain
         trans_fMRI_timeseries: fMRI gft weights timeseries (same length as EEG timeseries), graph domain
+    returns:
+        regions_all_corrs: all correlations within regions for all participants
+        harmonic_all_corrs: all correlations within harmonics for all participants
+        mean_regions_corrs
+        mean_harmonics_corrs
+        ttest_results
+
     """
     N = len(EEG_timeseries)
+    N_reg, _ = EEG_timeseries[0].shape
     mean_regions_corrs = np.empty((N))
     mean_harmonics_corrs = np.empty((N))
+    regions_all_corrs = np.empty((N_reg, N))
+    harmonics_all_corrs = np.empty((N_reg, N))
 
     for participant in np.arange(N):
         regions_corr = ex_EEG_fMRI_corr(
@@ -45,8 +55,10 @@ def vertex_vs_graph(
             trans_EEG_timeseries, trans_fMRI_timeseries, participant, "harmonic"
         )
         # only consider same regions/ harmonics
-        mean_reg = np.mean(np.abs(np.diag(regions_corr)))
-        mean_harmonic = np.mean(np.abs(np.diag(harmonics_corr)))
+        regions_all_corrs[:, participant] = np.diag(regions_corr)
+        harmonics_all_corrs[:, participant] = np.diag(harmonics_corr)
+        mean_reg = np.mean(np.abs(regions_all_corrs[:, participant]))
+        mean_harmonic = np.mean(np.abs(harmonics_all_corrs[:, participant]))
 
         print(
             f"participant {participant+1} regions diag: {np.round(mean_reg, 4)}, harmonics diag: {np.round(mean_harmonic, 4)}"
@@ -66,7 +78,13 @@ def vertex_vs_graph(
     )
 
     # ? absolute correlation between regions higher than harmonics
-    return mean_regions_corrs, mean_harmonics_corrs, ttest_results
+    return (
+        regions_all_corrs,
+        harmonics_all_corrs,
+        mean_regions_corrs,
+        mean_harmonics_corrs,
+        ttest_results,
+    )
 
 
 # %%

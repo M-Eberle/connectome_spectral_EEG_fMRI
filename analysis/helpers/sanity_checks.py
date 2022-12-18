@@ -41,8 +41,6 @@ from helpers.overview_plots import corrcoef2D
 
 # repeat for different time shifts
 # %%
-
-
 def compute_alpha_regressor(
     EEG_timeseries, ex_participant, regionsMap, HRF_resEEG, sampling_freq
 ):
@@ -64,7 +62,7 @@ def compute_alpha_regressor(
         alpha_reg_filt: filtered alpha regressor (edges are discarded due to edge
                     effects from filtering and from convolution with HRF)
     """
-    source_activity = EEG_timeseries[ex_participant]
+    source_activity = EEG_timeseries[:, :, ex_participant]
     # Sorting of Desikan-Killiany atlas regions in SC matrices
     # use sorting also for everything else?
     SCmat_sorting = np.concatenate(
@@ -83,7 +81,7 @@ def compute_alpha_regressor(
     # slow oscillations range
     order = 1  # why not 5?
     TR = 1.94  # BOLD sampling rate
-    alpha = np.array((8.5, 12))
+    alpha = np.array((8, 12))
     Wn = alpha / (sampling_freq / 2)  # devide by nyquist frequency
     b_hi, a_hi = sg.butter(order, Wn, btype="band")
     # is this also bandpass? what are the values?
@@ -99,10 +97,13 @@ def compute_alpha_regressor(
 
     # Iterate over regions
     for region in np.arange(68):
+
+        """
         # Get SC matrix sorting
         regindSAC = np.argwhere(regionsMap == SCmat_sorting[region])
-        # no sorting???? because I correlate with unsorted data??
-        # region_ts = source_activity[regindSAC, :]
+        print(f"regindSAC: {regindSAC}, region: {region}")
+        """
+        # use presorted EEG data
         region_ts = source_activity[region, :]
 
         # Filter in alpha range
@@ -117,13 +118,13 @@ def compute_alpha_regressor(
 
         # Hilbert transform to get instantaneous amplitude
         region_ts_filt_hilb = sg.hilbert(region_ts_filt)
-        inst_ampl = np.abs(region_ts_filt_hilb)[0, :, :]
+        inst_ampl = np.abs(region_ts_filt_hilb)
 
         # Convolution with HRF
         # indexing adapted? no second dimension before
         inst_ampl_HRF = sg.convolve(
-            inst_ampl[:, 100 : len(inst_ampl) - 100], HRF_resEEG, "valid"
-        )[0, :]
+            inst_ampl[100 : len(inst_ampl) - 100], HRF_resEEG[0, :], "valid"
+        )
 
         # Downsample to BOLD sampling rate (TR = 1.94 s)
         N_downsample = 388
@@ -162,7 +163,7 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
         alpha_reg: alpha regressor (edges are discarded)
         alpha_reg_filt: filtered alpha regressor (edges are discarded)
     """
-    source_activity = EEG_timeseries[ex_participant]
+    source_activity = EEG_timeseries[:, :, ex_participant]
     # Sorting of Desikan-Killiany atlas regions in SC matrices
     SCmat_sorting = np.concatenate(
         np.array(
@@ -180,7 +181,7 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
     # slow oscillations range
     order = 1  # why not 5?
     TR = 1.94  # BOLD sampling rate
-    alpha = np.array((8.5, 12))
+    alpha = np.array((8, 12))
     Wn = alpha / (sampling_freq / 2)  # devide by nyquist frequency
     b_hi, a_hi = sg.butter(order, Wn, btype="band")
     # is this also bandpass? what are the values?
@@ -196,12 +197,13 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
 
     # Iterate over regions
     for region in np.arange(68):
+        
+        """
         # Get SC matrix sorting
         regindSAC = np.argwhere(regionsMap == SCmat_sorting[region])
-
-        # no sorting???? because I correlate with unsorted data??
-        # region_ts = source_activity[regindSAC, :]
-        region_ts = source_activity[region, :]
+        """
+        # use presorted EEG data
+        region_ts = source_activity[regindSAC, :]
 
         # Filter in alpha range
         # Zero-phase digital filtering, padlen changes from matlab to python
@@ -215,7 +217,7 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
 
         # Hilbert transform to get instantaneous amplitude
         region_ts_filt_hilb = sg.hilbert(region_ts_filt)
-        inst_ampl = np.abs(region_ts_filt_hilb)  # [0, 0, :]
+        inst_ampl = np.abs(region_ts_filt_hilb)
 
         # Downsample to BOLD sampling rate (TR = 1.94 s)
         N_downsample = 388
@@ -286,9 +288,8 @@ def plot_alpha_reg_power_fMRI(
     )
     plt.plot(
         normalize_data(
-            fMRI_timeseries[ex_participant][
-                best_region,
-                shift : uncut - (max_shift - shift),
+            fMRI_timeseries[
+                best_region, shift : uncut - (max_shift - shift), ex_participant
             ][:max_time]
         ),
         label="fMRI",
@@ -305,7 +306,6 @@ def plot_alpha_reg_power_fMRI(
 def alpha_mean_corrs(
     fMRI_timeseries, EEG_timeseries, regionsMap, HRF_resEEG, sampling_freq=200
 ):
-
     """
     For every particpant, the correlation between
     - alpha regressor and fMRI timeseries
@@ -331,14 +331,16 @@ def alpha_mean_corrs(
         shifts_power: corresponding shifts for mean_reg_all
     """
 
-    N = len(fMRI_timeseries)
+    N_regions, N_timesteps, N = fMRI_timeseries.shape
     shifts_reg = np.zeros((N), dtype=int)
     shifts_power = np.zeros((N), dtype=int)
     mean_reg_all = np.empty((N))
     mean_power_all = np.empty((N))
+    all_corrs_reg = np.empty((N_regions, N, 10))  # max_shift = 10?
+    all_corrs_power = np.empty((N_regions, N, 10))  # max_shift = 10?
 
     for participant in np.arange(N):
-        fMRI_curr = fMRI_timeseries[participant]
+        fMRI_curr = fMRI_timeseries[:, :, participant]
 
         # with HRF convolution:
         alpha_reg, alpha_reg_filt = compute_alpha_regressor(
@@ -368,6 +370,7 @@ def alpha_mean_corrs(
             corr_reg = np.diagonal(
                 corrcoef2D(fMRI_curr[:, s : uncut - (max_shift - s)], alpha_reg_filt)
             )
+            all_corrs_reg[:, participant, s] = corr_reg
             # plot corr_reg
 
             # ? take mean over all region correlations
@@ -384,6 +387,7 @@ def alpha_mean_corrs(
             corr_power = np.diagonal(
                 corrcoef2D(fMRI_curr[:, s : uncut - (max_shift - s)], alpha_power_filt)
             )
+            all_corrs_power[:, participant, s] = corr_power
             mean_power = np.mean(corr_power)
 
             if np.abs(mean_power) > np.abs(mean_power_all[participant]):
@@ -419,10 +423,8 @@ def alpha_mean_corrs(
             f"participant {participant+1}\nhighest abs corr over time shifts for alpha regressor:\n{mean_reg_all[participant]}\nhighest abs corr over time shifts for alpha power band:\n{mean_power_all[participant]}"
         )
     return (
-        alpha_reg,
-        alpha_reg_filt,
-        alpha_power,
-        alpha_power_filt,
+        all_corrs_reg,
+        all_corrs_power,
         mean_reg_all,
         mean_power_all,
         shifts_reg,

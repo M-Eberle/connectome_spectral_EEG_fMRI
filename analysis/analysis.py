@@ -9,6 +9,7 @@ from scipy.stats import ttest_ind
 
 ### last steps
 # - load data
+# - sort data (participants, regions)
 # - transform data onto graph
 # - check that participant's indices in SC, fMRI, and EEG align
 # - symmetry of SCs? --> use +transpose for now
@@ -33,13 +34,13 @@ from scipy.stats import ttest_ind
 # - general refactoring
 
 # %%
+
 SC_path = "../data/empirical_structural_connectomes/SCs.mat"
 fMRI_data_path = "../data/empirical_fMRI/empirical_fMRI.mat"
 EEG_data_path = "../data/empirical_source_activity/source_activity.mat"
 
-regionsMap = sio.loadmat("../data/empirical_source_activity/regionsMap.mat")[
-    "regionsMap"
-][:, 0]
+EEG_regions_path = "../data/empirical_source_activity/regionsMap.mat"
+regionsMap = sio.loadmat(EEG_regions_path)["regionsMap"][:, 0]
 HRF_resEEG = sio.loadmat("../data/HRF_200Hz.mat")[
     "HRF_resEEG"
 ]  # hemodynamic response function
@@ -56,6 +57,7 @@ for idx, roi in enumerate(roi_IDs):
     idx_rois[idx] = np.argwhere(coords_labels == roi)
 coords = coords_all[idx_rois]
 
+N = 15
 ex_participant = 1
 ex_harmonic = 5
 ex_region = 5
@@ -74,7 +76,9 @@ if mode == "ind":
         N,
         N_regions,
         EEG_timesteps,
-    ) = get_data_ind_SCs(SC_path, EEG_data_path, fMRI_data_path, coords)
+    ) = get_data_ind_SCs(
+        SC_path, EEG_data_path, fMRI_data_path, EEG_regions_path, coords
+    )
 else:
     (
         G,
@@ -87,12 +91,11 @@ else:
         N,
         N_regions,
         EEG_timesteps,
-    ) = get_data_mean_SC(SC_path, EEG_data_path, fMRI_data_path, coords)
+    ) = get_data_mean_SC(
+        SC_path, EEG_data_path, fMRI_data_path, EEG_regions_path, coords
+    )
 
-N = len(trans_EEG_timeseries)
 plot_ex_interp(fMRI_timeseries, fMRI_timeseries_interp, ex_participant, ex_harmonic)
-
-
 # %%
 plot_ex_signal_EEG_fMRI(
     EEG_timeseries, fMRI_timeseries_interp, ex_participant, "region"
@@ -123,7 +126,6 @@ plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant)
 plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant)
 
 # %%
-# restructure data as numpy array
 EEG_power = np.empty((68, N))
 fMRI_power = np.empty((68, N))
 for participant in np.arange(N):
@@ -151,23 +153,53 @@ plot_cum_power(power_mean_fMRI, ex_participant, "fMRI")
 
 # freqs, psd = plot_fft_welch(EEG_timeseries[ex_participant][ex_region, :], sampling_freq)
 # use all EEG data instead
-freqs, psd = plot_fft_welch(np.array(EEG_timeseries).flatten(), sampling_freq)
+freqs, psd = plot_fft_welch(np.moveaxis(EEG_timeseries, -1, 0).flatten(), sampling_freq)
+
 # alpha-activity very prominent
 
 # %%
 # EEG sanity check 3: EEG-fMRI -> see helpers/sanity_check.py
+
 (
-    alpha_reg,
-    alpha_reg_filt,
-    alpha_power,
-    alpha_power_filt,
+    all_corrs_reg,
+    all_corrs_power,
     mean_reg_all,
     mean_power_all,
     shifts_reg,
     shifts_power,
 ) = alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, regionsMap, HRF_resEEG)
+
 # very low correlation? -> also, not necessarily negative correlation? sometimes more positive
 # filtered has second filter applied (low?)
+# %%
+import seaborn as sns
+
+# min = np.min((np.min(regions_all_corrs), np.min(harmonics_all_corrs)))
+# max = np.max((np.max(regions_all_corrs), np.max(harmonics_all_corrs)))
+sns.heatmap(all_corrs_reg)
+plt.xlabel("participant idx")
+plt.ylabel("region")
+plt.title("EEG-fMRI correlation within regions")
+plt.show()
+sns.heatmap(all_corrs_power)
+plt.xlabel("participant idx")
+plt.ylabel("harmonic")
+plt.title("EEG-fMRI correlation within harmonics")
+# %%
+# compare to MATLAB regressor
+
+ex_participant = 0
+alpha_reg, alpha_reg_filt = compute_alpha_regressor(
+    EEG_timeseries, ex_participant, regionsMap, HRF_resEEG, sampling_freq
+)
+
+print(alpha_reg.T[0, 44])
+print(alpha_reg.T[15, 3])
+print(alpha_reg.T[386, 16])
+plt.plot(alpha_reg.T)
+plt.title("Python: alpha regressor for participant 1")
+plt.xlabel("time")
+plt.ylabel("value")
 # %%
 plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power)
 # __________________
@@ -176,20 +208,71 @@ plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power)
 # test hypotheses
 # %%
 # compare vertex vs graph domain: correlation between EEG & fMRI
-mean_regions_corrs, mean_harmonics_corrs, ttest_results = vertex_vs_graph(
+(
+    regions_all_corrs,
+    harmonics_all_corrs,
+    mean_regions_corrs,
+    mean_harmonics_corrs,
+    ttest_results,
+) = vertex_vs_graph(
     EEG_timeseries, fMRI_timeseries_interp, trans_EEG_timeseries, trans_fMRI_timeseries
 )
 
 # %%
-# compare similarity measures between all p[articipants]
+min = np.min((np.min(regions_all_corrs), np.min(harmonics_all_corrs)))
+max = np.max((np.max(regions_all_corrs), np.max(harmonics_all_corrs)))
+sns.heatmap(regions_all_corrs, vmin=min, vmax=max)
+plt.xlabel("participant idx")
+plt.ylabel("region")
+plt.title("EEG-fMRI correlation within regions")
+plt.show()
+sns.heatmap(harmonics_all_corrs, vmin=min, vmax=max)
+plt.xlabel("participant idx")
+plt.ylabel("harmonic")
+plt.title("EEG-fMRI correlation within harmonics")
+
+# %%
+# compare similarity measures between all participants
 simi_betw_participants(Gs, simi_TVG, "TVG", "fMRI", trans_fMRI_timeseries)
 simi_betw_participants(Gs, simi_TVG, "TVG", "EEG", trans_EEG_timeseries)
+
 # scale for EEG a lot smaller than for fMRI
 
 simi_betw_participants(Gs, simi_GE, "GE")
 
 simi_betw_participants(Gs, simi_JET, "JET", "fMRI", trans_fMRI_timeseries)
 simi_betw_participants(Gs, simi_JET, "JET", "EEG", trans_EEG_timeseries)
+# %%
+# cut off start & end of EEG data due to weird spikes
+"""
+N_reg, N_time = EEG_timeseries[0].shape
+cut = 5000
+EEG_power_all = np.empty((N_reg, N))
+for participant in np.arange(N):
+    signal = EEG_timeseries[participant][:, cut:N_time-cut]
+    plt.plot(signal.T)
+    plt.title(f"EEG for participant {participant+1}")
+    plt.show()
+    power = signal ** 2
+    power = np.mean(power / np.sum(power, 0)[np.newaxis, :], 1)
+    EEG_power_all[:,participant] = power
+    print("mean")
+    print(np.mean(power))
+    plt.stem(power)
+    plt.xlabel("harmonic")
+    plt.ylabel("signal strength")
+    plt.title(
+        f"{mode} normalized graph frequency domain for participant {participant + 1}\n (mean over time, normalized also per timepoint)"
+    )
+    plt.show()
+
+plt.stem(np.mean(EEG_power_all, 1))
+#plt.axhline(np.mean(EEG_power_all))
+plt.plot(np.cumsum(np.mean(EEG_power_all, 1)))
+for i in np.arange(50):
+    curr_random = np.random.uniform(0, 1, N_regions)
+    plt.plot(np.cumsum(curr_random) / np.sum(curr_random), color="grey", alpha=0.1)
+"""
 
 # %%
 # compare lower vs upper half of harmonics

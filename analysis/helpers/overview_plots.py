@@ -40,12 +40,12 @@ def plot_ex_interp(timeseries, timeseries_interp, ex_participant, ex_harmonic):
         ex_harmonic: example harmonic index
     """
     plt.subplot(211)
-    plt.plot(timeseries[ex_participant][ex_harmonic, :])
+    plt.plot(timeseries[ex_harmonic, :, ex_participant])
     plt.xlabel("time")
     plt.ylabel("signal")
     plt.title("original fMRI signal")
     plt.subplot(212)
-    plt.plot(timeseries_interp[ex_participant][ex_harmonic, :])
+    plt.plot(timeseries_interp[ex_harmonic, :, ex_participant])
     plt.xlabel("time")
     plt.ylabel("signal")
     plt.title("stretched fMRI signal")
@@ -62,7 +62,7 @@ def plot_ex_signal_EEG_fMRI(EEG_timeseries, fMRI_timeseries, ex_participant, mod
         ex_participant: example participant index
         mode: string, should be 'region' or 'harmonic'
     """
-    N_regions, _ = EEG_timeseries[ex_participant].shape
+    N_regions, _ = EEG_timeseries[:, :, ex_participant].shape
 
     signal = "signal"
     if mode == "region":
@@ -73,14 +73,14 @@ def plot_ex_signal_EEG_fMRI(EEG_timeseries, fMRI_timeseries, ex_participant, mod
     # normalize each line?
     plt.subplot(211)
     for i in np.linspace(0, N_regions - 1, 5).astype(int):
-        plt.plot(EEG_timeseries[ex_participant][i, :], label=f"{mode} {i+1}")
+        plt.plot(EEG_timeseries[i, :, ex_participant], label=f"{mode} {i+1}")
     plt.xlabel("time")
     plt.ylabel(signal)
     plt.title("examplary EEG signal for one participant")
     plt.legend()
     plt.subplot(212)
     for i in np.linspace(0, N_regions - 1, 5).astype(int):
-        plt.plot(fMRI_timeseries[ex_participant][i, :], label=f"{mode} {i+1}")
+        plt.plot(fMRI_timeseries[i, :, ex_participant], label=f"{mode} {i+1}")
     plt.xlabel("time")
     plt.ylabel(signal)
     plt.title("examplary fMRI signal for one participant")
@@ -102,7 +102,7 @@ def plot_ex_signal_fMRI_EEG_one(
         mode: string, should be 'region' or 'harmonic'
     """
 
-    _, EEG_timesteps = EEG_timeseries[ex_participant].shape
+    _, EEG_timesteps = EEG_timeseries[:, :, ex_participant].shape
 
     signal = "signal"
     if mode == "region":
@@ -111,17 +111,17 @@ def plot_ex_signal_fMRI_EEG_one(
         signal = "GFT weights"
 
     plt.plot(
-        fMRI_timeseries[ex_participant][ex_region_harmonic, :]
-        / np.max(np.abs(fMRI_timeseries[ex_participant][ex_region_harmonic, :])),
+        fMRI_timeseries[ex_region_harmonic, :, ex_participant]
+        / np.max(np.abs(fMRI_timeseries[ex_region_harmonic, :, ex_participant])),
         label="fMRI",
         alpha=0.7,
     )
     plt.plot(
-        EEG_timeseries[ex_participant][ex_region_harmonic, 100 : EEG_timesteps - 101]
+        EEG_timeseries[ex_region_harmonic, 100 : EEG_timesteps - 101, ex_participant]
         / np.max(
             np.abs(
-                EEG_timeseries[ex_participant][
-                    ex_region_harmonic, 100 : EEG_timesteps - 101
+                EEG_timeseries[
+                    ex_region_harmonic, 100 : EEG_timesteps - 101, ex_participant
                 ]
             )
         ),
@@ -149,8 +149,8 @@ def plot_ex_regions_harmonics(timeseries, trans_timeseries, ex_participant, mode
 
     # 10**5 used in Glomb et al. (2020) for same plots ?
     factor = 10**5
-    activity_scaled = timeseries[ex_participant] * factor
-    weights_scaled = trans_timeseries[ex_participant] * factor
+    activity_scaled = timeseries[:, :, ex_participant] * factor
+    weights_scaled = trans_timeseries[:, :, ex_participant] * factor
 
     # EEG activity in original domain
     plt.subplot(211)
@@ -190,7 +190,7 @@ def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode, plot
         fMRI_EEG_corr: correlation matrix of correlation between fMRI & EEGH regions/harmonics
     """
     fMRI_EEG_corr = corrcoef2D(
-        fMRI_timeseries[ex_participant], EEG_timeseries[ex_participant]
+        fMRI_timeseries[:, :, ex_participant], EEG_timeseries[:, :, ex_participant]
     )
     if plot == True:
         map = sns.heatmap(fMRI_EEG_corr)
@@ -225,7 +225,7 @@ def power_mean(
     # does this make sense with a mean over time? -> analogous to EEG/fMRI power plots above, otherwise timesteps instead of harmonics are important
     # normalize power vector to 1 --> normalize power to 1 at every point in time????
     # normalize power at every time point? and then also divide by number of regions?
-    power = signal[ex_participant][low_harm:high_harm, :] ** 2
+    power = signal[low_harm:high_harm, :, ex_participant] ** 2
     power = np.mean(power / np.sum(power, 0)[np.newaxis, :], 1)
     print("mean")
     print(np.mean(power))
@@ -307,7 +307,7 @@ def power_norm(trans_timeseries, ex_participant):
     returns:
         power_norm: normalized power matrix
     """
-    power = trans_timeseries[ex_participant] ** 2
+    power = trans_timeseries[:, :, ex_participant] ** 2
     # power_norm = power / np.sum(power)
     # normalize power in every timestep instead of overall
     power_norm = power / np.sum(power, 0)
@@ -382,7 +382,6 @@ def plot_fft_welch(signal, sampling_freq):
         psd: power spectral density of signal
     """
     sampling_freq = 200  # Hz
-    time = np.arange(signal.size) / sampling_freq
 
     # Define window length (4 seconds)
     win = 2 * sampling_freq
@@ -411,7 +410,7 @@ def plot_ex_graphs_3D(Gs, trans_timeseries, ex_participant, mode):
         ex_participant: example participant index
         mode: string, should be 'EEG' or 'fMRI'
     """
-    timesteps = len(trans_timeseries[ex_participant].T)
+    timesteps = len(trans_timeseries[:, :, ex_participant].T)
     N_plots = 3
     stepsize = int(timesteps / N_plots)
 
@@ -420,7 +419,7 @@ def plot_ex_graphs_3D(Gs, trans_timeseries, ex_participant, mode):
     )
     for t, ax in enumerate(axes):
         Gs[ex_participant].plot_signal(
-            trans_timeseries[ex_participant][:, stepsize * t],
+            trans_timeseries[:, :, ex_participant][:, stepsize * t],
             vertex_size=30,
             show_edges=True,
             ax=ax,
