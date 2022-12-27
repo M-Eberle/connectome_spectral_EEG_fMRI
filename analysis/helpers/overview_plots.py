@@ -76,14 +76,14 @@ def plot_ex_signal_EEG_fMRI(EEG_timeseries, fMRI_timeseries, ex_participant, mod
         plt.plot(EEG_timeseries[i, :, ex_participant], label=f"{mode} {i+1}")
     plt.xlabel("time")
     plt.ylabel(signal)
-    plt.title("examplary EEG signal for one participant")
+    plt.title(f"examplary EEG signal for participant {ex_participant+1}")
     plt.legend()
     plt.subplot(212)
     for i in np.linspace(0, N_regions - 1, 5).astype(int):
         plt.plot(fMRI_timeseries[i, :, ex_participant], label=f"{mode} {i+1}")
     plt.xlabel("time")
     plt.ylabel(signal)
-    plt.title("examplary fMRI signal for one participant")
+    plt.title(f"examplary fMRI signal for participant {ex_participant+1}")
     plt.legend()
     plt.tight_layout()
     plt.show()
@@ -203,12 +203,10 @@ def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode, plot
     return fMRI_EEG_corr
 
 
-def power_mean(
-    signal,
+def plot_power_mean(
+    power_norm,
     ex_participant,
     mode,
-    low_harm=0,
-    high_harm=68,
 ):
     """
     plots mean power over time (1 participant, all harmonics)
@@ -225,18 +223,15 @@ def power_mean(
     # does this make sense with a mean over time? -> analogous to EEG/fMRI power plots above, otherwise timesteps instead of harmonics are important
     # normalize power vector to 1 --> normalize power to 1 at every point in time????
     # normalize power at every time point? and then also divide by number of regions?
-    power = signal[low_harm:high_harm, :, ex_participant] ** 2
-    power = np.mean(power / np.sum(power, 0)[np.newaxis, :], 1)
     print("mean")
-    print(np.mean(power))
-    plt.stem(power)
+    power_mean = np.mean(power_norm)
+    plt.stem(power_mean)
     plt.xlabel("harmonic")
     plt.ylabel("signal strength")
     plt.title(
         f"{mode} normalized graph frequency domain for participant {ex_participant + 1}\n (mean over time, normalized also per timepoint)"
     )
     plt.show()
-    return power
 
 
 def plot_cum_power(power_mean, ex_participant, mode):
@@ -298,22 +293,6 @@ def plot_cum_power(power_mean, ex_participant, mode):
     """
 
 
-def power_norm(trans_timeseries, ex_participant):
-    """
-    returns power of transformed signal normalized for every timestep (1 participant, all harmonics)
-    arguments:
-        trans_timeseries: GFT weight matrix
-        ex_participant: example participant index
-    returns:
-        power_norm: normalized power matrix
-    """
-    power = trans_timeseries[:, :, ex_participant] ** 2
-    # power_norm = power / np.sum(power)
-    # normalize power in every timestep instead of overall
-    power_norm = power / np.sum(power, 0)
-    return power_norm
-
-
 def plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant):
     """
     plots exemplary power for EEG and fMRI time (for 1 participant, all harmonics)
@@ -361,7 +340,11 @@ def plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant):
         fMRI_power_norm: fMRI power matrix
         ex_participant: example participant index
     """
-    map = sns.heatmap(corrcoef2D(EEG_power_norm, fMRI_power_norm))
+    map = sns.heatmap(
+        corrcoef2D(
+            EEG_power_norm[:, :, ex_participant], fMRI_power_norm[:, :, ex_participant]
+        )
+    )
     map.set_xlabel("EEG ?", fontsize=10)
     map.set_ylabel("fMRI ?", fontsize=10)
     plt.title(

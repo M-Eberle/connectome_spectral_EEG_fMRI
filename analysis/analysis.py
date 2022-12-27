@@ -39,17 +39,60 @@ from helpers import *
 # - general refactoring
 
 # %%
+def _loop_participants(func):
+    def wrapper(*args):
+        if args[0].loop_participants:
+            for participant in np.arange(args[0].N):
+                args[0].ex_participant = participant
+                func(*args)
+        else:
+            func(*args)
+
+    return wrapper
+
+
+def _loop_regions(func):
+    def wrapper(*args):
+        if args[0].loop_regions:
+            for region in np.arange(args[0].N_regions):
+                args[0].ex_region = region
+                func(*args)
+        else:
+            func(*args)
+
+    return wrapper
+
+
+def _loop_domains(func):
+    def wrapper(*args):
+        for domain in args[0].domains:
+            args[0].domain = domain
+            func(*args)
+
+    return wrapper
+
+
+def _loop_modalities(func, interp=True):
+    def wrapper(*args):
+        print()
+        for modality in args[0].modalities:
+            args[0].modality = modality
+            args[0].choose_modality_data(modality, interp)
+            func(*args)
+
+    return wrapper
 
 
 class data:
     """
-    class for all data and methods for generation of overview plots and analysis
+    class for all data and methods for generation of overview plots and data analysis
     """
 
-    def __init__(self, mode, loop_participants=True):
+    def __init__(self, mode, loop_participants=True, loop_regions=True):
 
         self.mode = mode
         self.loop_participants = loop_participants
+        self.loop_regions = loop_regions
 
         # paths
         # data
@@ -74,6 +117,14 @@ class data:
         self.ex_participant = 1
         self.ex_harmonic = 5
         self.ex_region = 5
+        self.domains = ["region", "harmonic"]
+        self.domain = None
+        self.modalities = ["EEG", "fMRI"]
+        self.modality = None
+
+        # for power
+        self.low_harm = None
+        self.high_harm = None
 
         # initialize variables for data and IDs
         # structural connectivity matrices  graphs
@@ -105,19 +156,14 @@ class data:
         self.coords = None
         self.HRF_resEEG = sio.loadmat(self.HRF_path)["HRF_resEEG"]
 
+        # for methods
+        self.timeseries = None
+        self.trans_timeseries = None
+
         # get data
         self._get_coords()
         self._get_SC_matrices()
         self._get_functional_data()
-
-    def _loop_participants(func):
-        def wrapper(*args):
-            if args.loop_participants:
-                for participant in np.arange(args.N):
-                    args.ex_participant = participant
-                    func(*args)
-            else:
-                func(*args)
 
     def _get_coords(self):
 
@@ -207,6 +253,10 @@ class data:
             self.ex_participant,
             self.ex_harmonic,
         )
+
+        # variables for analysis
+        self.EEG_power = None
+        self.fMRI_power = None
 
     def __sort_EEG_data(self):
 
@@ -304,63 +354,108 @@ class data:
                 "all region IDs are represented by the same indices in SC matrix, fMRI, and EEG data"
             )
 
+    # _______
+    # analysis methods
+    def choose_modality_data(self, modality, interp):
+        if modality == self.modalities[0]:
+            self.timeseries = self.EEG_timeseries
+            self.trans_timeseries = self.trans_EEG_timeseries
+        else:
+            if interp:
+                self.timeseries = self.fMRI_timeseries_interp
+                self.trans_timeseries = self.trans_fMRI_timeseries
+            else:
+                self.timeseries = self.fMRI_timeseries
+                self.trans_timeseries = self.trans_fMRI_timeseries
+
     @_loop_participants
-    def plot_ex_signal(self):
+    @_loop_domains
+    def plot_signal(self):
         plot_ex_signal_EEG_fMRI(
             self.EEG_timeseries,
             self.fMRI_timeseries_interp,
             self.ex_participant,
-            "region",
+            self.domain,
         )
+
+    @_loop_participants
+    @_loop_regions
+    @_loop_domains
+    def plot_signal_single_domain(self):
+        plot_ex_signal_fMRI_EEG_one(
+            self.timeseries,
+            self.trans_timeseries,
+            self.ex_participant,
+            self.ex_region,
+            self.domain,
+        )
+
+    @_loop_participants
+    @_loop_modalities
+    def plot_domain(self):
+        plot_ex_regions_harmonics(
+            self.timeseries, self.trans_timeseries, self.ex_participant, self.modality
+        )
+
+    def get_power(self, low_harm=0, high_harm=68):
+        """
+        returns power of transformed signal normalized for every timestep (all participant, all harmonics)
+        """
+        EEG_power = self.trans_EEG_timeseries[low_harm:high_harm, :, :] ** 2
+        fMRI_power = self.trans_EEG_timeseries[low_harm:high_harm, :, :] ** 2
+        # normalize
+        # mean over wrong axis?
+        self.EEG_power = EEG_power / np.sum(EEG_power, 0)[np.newaxis, :]
+        self.fMRI_power = fMRI_power / np.sum(fMRI_power, 0)[np.newaxis, :]
+
+        self.low_harm = low_harm
+        self.high_harm = high_harm
+
+    @_loop_participants
+    def plot_power(self, low_harm=0, high_harm=68):
+
+        if not ((self.low_harm == low_harm) & (self.high_harm == high_harm)):
+            self.get_power()
+
+        plot_power_mean(self.EEG_power, self.ex_participant, self.modalities[0])
+        plot_power_mean(self.fMRI_power, self.ex_participant, self.modalities[1])
+
+        plot_ex_power_EEG_fMRI(self.EEG_power, self.fMRI_power, self.ex_participant)
+
+        plot_power_corr(self.EEG_power, self.fMRI_power, self.ex_participant)
+
+    def plot_power_mean_o_time(self, low_harm=0, high_harm=68):
+        """
+        # EEG sanity check 1: EEG power, mean over participants
+        # ________________________
+        # find mean power over all participants ( & over time)
+        power_mean_EEG = np.mean(EEG_power, 1)
+        power_mean_fMRI = np.mean(fMRI_power, 1)
+        # cumulative power, mean over participants (plot titles not correct)
+        plot_cum_power(power_mean_EEG, ex_participant, "EEG")
+        plot_cum_power(power_mean_fMRI, ex_participant, "fMRI")
+        """
 
 
 # %%
 mode = "mean"  # 'mean' or 'ind'
 # data_mean = data('mean')
-data_ind = data("ind")
+data_ind = data(mode="ind", loop_participants=False)
 
 # %%
-data_ind.plot_ex_signal()
-# %%
-#
+data_ind.plot_signal()
+data_ind.plot_signal_single_domain()
+data_ind.plot_domain()
+data_ind.plot_power()
+data_ind.plot_power_mean_o_time()
 
+# %%
+# ____________________________
+# everything below has to be rewritten for data class
 
-for ex_participant in np.arange(N):
-    plot_ex_signal_EEG_fMRI(
-        EEG_timeseries, fMRI_timeseries_interp, ex_participant, "region"
-    )
-# %%
-plot_ex_signal_EEG_fMRI(
-    trans_EEG_timeseries, trans_fMRI_timeseries, ex_participant, "harmonic"
-)
-# %%
-plot_ex_regions_harmonics(EEG_timeseries, trans_EEG_timeseries, ex_participant, "EEG")
-plot_ex_regions_harmonics(
-    fMRI_timeseries_interp, trans_fMRI_timeseries, ex_participant, "fMRI"
-)
-# %%
-plot_ex_signal_fMRI_EEG_one(
-    EEG_timeseries, fMRI_timeseries_interp, ex_participant, ex_region, "region"
-)
-plot_ex_signal_fMRI_EEG_one(
-    trans_EEG_timeseries, trans_fMRI_timeseries, ex_participant, ex_harmonic, "harmonic"
-)
 # %%
 plot_ex_graphs_3D(Gs, trans_EEG_timeseries, ex_participant, "EEG")
 plot_ex_graphs_3D(Gs, trans_fMRI_timeseries, ex_participant, "fMRI")
-
-# %%
-EEG_power_norm = power_norm(trans_EEG_timeseries, ex_participant)
-fMRI_power_norm = power_norm(trans_fMRI_timeseries, ex_participant)
-plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant)
-plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant)
-
-# %%
-EEG_power = np.empty((68, N))
-fMRI_power = np.empty((68, N))
-for participant in np.arange(N):
-    EEG_power[:, participant] = power_mean(trans_EEG_timeseries, participant, "EEG")
-    fMRI_power[:, participant] = power_mean(trans_fMRI_timeseries, participant, "fMRI")
 
 # %%
 # cumulative power for example participant
@@ -368,14 +463,7 @@ plot_cum_power(EEG_power[:, ex_participant], ex_participant, "EEG")
 plot_cum_power(fMRI_power[:, ex_participant], ex_participant, "fMRI")
 
 # %%
-# EEG sanity check 1: EEG power, mean over participants
-# ________________________
-# find mean power over all participants ( & over time)
-power_mean_EEG = np.mean(EEG_power, 1)
-power_mean_fMRI = np.mean(fMRI_power, 1)
-# cumulative power, mean over participants (plot titles not correct)
-plot_cum_power(power_mean_EEG, ex_participant, "EEG")
-plot_cum_power(power_mean_fMRI, ex_participant, "fMRI")
+
 
 # %%
 # EEG sanity check 2: EEG frequency band
