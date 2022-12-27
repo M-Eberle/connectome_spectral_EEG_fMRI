@@ -40,8 +40,8 @@ def vertex_vs_graph(
         ttest_results
 
     """
-    N = len(EEG_timeseries)
-    N_reg, _ = EEG_timeseries[0].shape
+    N = EEG_timeseries.shape[-1]
+    N_reg, _ = EEG_timeseries[:, :, 0].shape
     mean_regions_corrs = np.empty((N))
     mean_harmonics_corrs = np.empty((N))
     regions_all_corrs = np.empty((N_reg, N))

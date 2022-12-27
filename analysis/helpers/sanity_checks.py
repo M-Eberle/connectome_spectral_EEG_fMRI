@@ -197,13 +197,13 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
 
     # Iterate over regions
     for region in np.arange(68):
-        
+
         """
         # Get SC matrix sorting
         regindSAC = np.argwhere(regionsMap == SCmat_sorting[region])
         """
         # use presorted EEG data
-        region_ts = source_activity[regindSAC, :]
+        region_ts = source_activity[region, :]
 
         # Filter in alpha range
         # Zero-phase digital filtering, padlen changes from matlab to python
