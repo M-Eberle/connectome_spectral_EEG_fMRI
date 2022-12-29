@@ -39,6 +39,8 @@ from helpers import *
 # - general refactoring
 
 # %%
+
+
 def _loop_participants(func):
     def wrapper(*args):
         if args[0].loop_participants:
@@ -159,6 +161,7 @@ class data:
         # for methods
         self.timeseries = None
         self.trans_timeseries = None
+        self.power = None
 
         # get data
         self._get_coords()
@@ -357,9 +360,15 @@ class data:
     # _______
     # analysis methods
     def choose_modality_data(self, modality, interp):
+        """
+        helper function for loop modality decorator
+        """
+        if not ((self.low_harm != None) & (self.high_harm != None)):
+            self.get_power()
         if modality == self.modalities[0]:
             self.timeseries = self.EEG_timeseries
             self.trans_timeseries = self.trans_EEG_timeseries
+            self.power = self.EEG_power
         else:
             if interp:
                 self.timeseries = self.fMRI_timeseries_interp
@@ -367,6 +376,21 @@ class data:
             else:
                 self.timeseries = self.fMRI_timeseries
                 self.trans_timeseries = self.trans_fMRI_timeseries
+            self.power = self.fMRI_power
+
+    def get_power(self, low_harm=0, high_harm=68):
+        """
+        returns power of transformed signal normalized for every timestep (all participant, all harmonics)
+        """
+        EEG_power = self.trans_EEG_timeseries[low_harm:high_harm, :, :] ** 2
+        fMRI_power = self.trans_fMRI_timeseries[low_harm:high_harm, :, :] ** 2
+        # normalize
+        # mean over wrong axis?
+        self.EEG_power = EEG_power / np.sum(EEG_power, 0)[np.newaxis, :]
+        self.fMRI_power = fMRI_power / np.sum(fMRI_power, 0)[np.newaxis, :]
+
+        self.low_harm = low_harm
+        self.high_harm = high_harm
 
     @_loop_participants
     @_loop_domains
@@ -383,8 +407,8 @@ class data:
     @_loop_domains
     def plot_signal_single_domain(self):
         plot_ex_signal_fMRI_EEG_one(
-            self.timeseries,
-            self.trans_timeseries,
+            self.EEG_timeseries,
+            self.fMRI_timeseries_interp,
             self.ex_participant,
             self.ex_region,
             self.domain,
@@ -397,44 +421,51 @@ class data:
             self.timeseries, self.trans_timeseries, self.ex_participant, self.modality
         )
 
-    def get_power(self, low_harm=0, high_harm=68):
-        """
-        returns power of transformed signal normalized for every timestep (all participant, all harmonics)
-        """
-        EEG_power = self.trans_EEG_timeseries[low_harm:high_harm, :, :] ** 2
-        fMRI_power = self.trans_EEG_timeseries[low_harm:high_harm, :, :] ** 2
-        # normalize
-        # mean over wrong axis?
-        self.EEG_power = EEG_power / np.sum(EEG_power, 0)[np.newaxis, :]
-        self.fMRI_power = fMRI_power / np.sum(fMRI_power, 0)[np.newaxis, :]
-
-        self.low_harm = low_harm
-        self.high_harm = high_harm
-
     @_loop_participants
-    def plot_power(self, low_harm=0, high_harm=68):
-
+    @_loop_modalities
+    def plot_power_stem_cum(self, low_harm=0, high_harm=68):
+        """
+        Plot power per harmonic and cumulative power for individual participant(s)
+        """
         if not ((self.low_harm == low_harm) & (self.high_harm == high_harm)):
             self.get_power()
+        print(self.modality)
+        print(self.ex_participant)
+        plot_power_stem(self.power, self.modality, self.ex_participant)
+        plot_power_cum(self.power, self.modality, self.ex_participant)
 
-        plot_power_mean(self.EEG_power, self.ex_participant, self.modalities[0])
-        plot_power_mean(self.fMRI_power, self.ex_participant, self.modalities[1])
+    @_loop_modalities
+    def plot_power_mean_stem_cum(self, low_harm=0, high_harm=68):
+        """
+        EEG sanity check 1: EEG power, mean over participants
+        Plot power per harmonic and cumulative power over all participants
+        """
+        if not ((self.low_harm == low_harm) & (self.high_harm == high_harm)):
+            self.get_power()
+        print(self.modality)
+        plot_power_stem(self.power, self.modality)
+        plot_power_cum(self.power, self.modality)
 
+    @_loop_participants
+    def plot_power_corr(self, low_harm=0, high_harm=68):
+        """
+        Plot power over time and power correlation for fMRI and EEG for individual participant(s)
+        """
+        if not ((self.low_harm == low_harm) & (self.high_harm == high_harm)):
+            self.get_power()
+        # plot fMRI-EEG power in comparison and then correlation
         plot_ex_power_EEG_fMRI(self.EEG_power, self.fMRI_power, self.ex_participant)
-
         plot_power_corr(self.EEG_power, self.fMRI_power, self.ex_participant)
 
-    def plot_power_mean_o_time(self, low_harm=0, high_harm=68):
+    def plot_power_mean_corr(self, low_harm=0, high_harm=68):
         """
-        # EEG sanity check 1: EEG power, mean over participants
-        # ________________________
-        # find mean power over all participants ( & over time)
-        power_mean_EEG = np.mean(EEG_power, 1)
-        power_mean_fMRI = np.mean(fMRI_power, 1)
-        # cumulative power, mean over participants (plot titles not correct)
-        plot_cum_power(power_mean_EEG, ex_participant, "EEG")
-        plot_cum_power(power_mean_fMRI, ex_participant, "fMRI")
+        Plot power over time and power correlation for fMRI and EEG over all participants
         """
+        if not ((self.low_harm == low_harm) & (self.high_harm == high_harm)):
+            self.get_power()
+        # plot fMRI-EEG power in comparison and then correlation
+        plot_ex_power_EEG_fMRI(self.EEG_power, self.fMRI_power)
+        plot_power_corr(self.EEG_power, self.fMRI_power)
 
 
 # %%
@@ -443,11 +474,14 @@ mode = "mean"  # 'mean' or 'ind'
 data_ind = data(mode="ind", loop_participants=False)
 
 # %%
-data_ind.plot_signal()
-data_ind.plot_signal_single_domain()
-data_ind.plot_domain()
-data_ind.plot_power()
-data_ind.plot_power_mean_o_time()
+# data_ind.plot_signal()
+# data_ind.plot_signal_single_domain()
+# data_ind.plot_domain()
+data_ind.plot_power_stem_cum()
+data_ind.plot_power_mean_stem_cum()
+data_ind.plot_power_corr()
+data_ind.plot_power_mean_corr()
+
 
 # %%
 # ____________________________

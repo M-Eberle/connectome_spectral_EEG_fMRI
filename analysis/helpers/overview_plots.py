@@ -203,55 +203,61 @@ def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode, plot
     return fMRI_EEG_corr
 
 
-def plot_power_mean(
-    power_norm,
-    ex_participant,
-    mode,
-):
+def plot_power_stem(power_norm, mode, ex_participant=None):
     """
     plots mean power over time (1 participant, all harmonics)
     arguments:
-        signal: GFT weights
-        ex_participant: example participant index
+        power_norm: power over time
         mode: string, should be 'EEG' or 'fMRI'
+        ex_participant: example participant index
     return:
         power: power per harmonic
     """
+
+    if ex_participant == None:
+        title = f"{mode} normalized graph frequency domain\n (mean over time and participants, normalized per timepoint)"
+        power_mean = np.mean(power_norm, (1, 2))
+    else:
+        title = f"{mode} normalized graph frequency domain for participant {ex_participant + 1}\n (mean over time, normalized per timepoint)"
+        power_mean = np.mean(power_norm[:, :, ex_participant], 1)
+
     # mean power (L2 norm) over time
     # or sqrt of L2 norm??
     # square in right place?
     # does this make sense with a mean over time? -> analogous to EEG/fMRI power plots above, otherwise timesteps instead of harmonics are important
     # normalize power vector to 1 --> normalize power to 1 at every point in time????
     # normalize power at every time point? and then also divide by number of regions?
-    print("mean")
-    power_mean = np.mean(power_norm)
+
     plt.stem(power_mean)
     plt.xlabel("harmonic")
     plt.ylabel("signal strength")
-    plt.title(
-        f"{mode} normalized graph frequency domain for participant {ex_participant + 1}\n (mean over time, normalized also per timepoint)"
-    )
+    plt.title(title)
     plt.show()
 
 
-def plot_cum_power(power_mean, ex_participant, mode):
+def plot_power_cum(power_norm, mode, ex_participant=None):
     """
     plots cumulative power (mean over time) (1 participant, all harmonics)
     arguments:
-        power_mean: mean power over time
-        ex_participant: example participant index
+        power_norm: power over time
         mode: string, should be 'EEG' or 'fMRI'
+        ex_participant: example participant index
     """
+    if ex_participant == None:
+        title = f"{mode} power captured cumulatively\n (mean over time and participants, normalized per timepoint)"
+        power_mean = np.mean(power_norm, (1, 2))
+    else:
+        title = f"{mode} power captured cumulatively for participant {ex_participant + 1}\n (mean over time, normalized per timepoint)"
+        power_mean = np.mean(power_norm[:, :, ex_participant], 1)
+
     N_regions = power_mean.size
     for i in np.arange(50):
         curr_random = np.random.uniform(0, 1, N_regions)
         plt.plot(np.cumsum(curr_random) / np.sum(curr_random), color="grey", alpha=0.1)
     plt.plot(np.cumsum(power_mean), label="SC graph")
     plt.xlabel("harmonic")
-    plt.ylabel("cumulative power ?")
-    plt.title(
-        f"{mode} power captured cumulatively for participant {ex_participant + 1}\n (mean over time, normalized also per timepoint)"
-    )
+    plt.ylabel("cumulative power")
+    plt.title(title)
     handles, labels = plt.gca().get_legend_handles_labels()
     line = Line2D([0], [0], label="random graphs", color="grey", alpha=0.1)
     handles.extend(
@@ -261,39 +267,9 @@ def plot_cum_power(power_mean, ex_participant, mode):
     )
     plt.legend(handles=handles)
     plt.show()
-    """
-    # normalize power only after taking the mean, not per time point?
-    t_mean_freq = np.mean(trans_EEG_timeseries[ex_participant] ** 2, 1)
-    t_mean_freq_norm = t_mean_freq / np.sum(t_mean_freq)
-    plt.stem(t_mean_freq_norm)
-    plt.xlabel("harmonic")
-    plt.ylabel("signal strength")
-    plt.title(
-        f"normalized graph frequency domain for participant {ex_participant + 1} (mean over time)"
-    )
-    plt.show()
-    for i in np.arange(50):
-        curr_random = np.random.uniform(0, 1, N_regions)
-        plt.plot(np.cumsum(curr_random) / np.sum(curr_random), color="grey", alpha=0.1)
-    plt.plot(np.cumsum(t_mean_freq_norm), label="SC graph")
-    plt.xlabel("harmonic")
-    plt.ylabel("cumulative power ?")
-    plt.title(
-        f"Power captured cumulatively for participant {ex_participant + 1} (mean over time)"
-    )
-    handles, labels = plt.gca().get_legend_handles_labels()
-    line = Line2D([0], [0], label="random graphs", color="grey", alpha=0.1)
-    handles.extend(
-        [
-            line,
-        ]
-    )
-    plt.legend(handles=handles)
-    plt.show()
-    """
 
 
-def plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant):
+def plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant=None):
     """
     plots exemplary power for EEG and fMRI time (for 1 participant, all harmonics)
     arguments:
@@ -302,28 +278,39 @@ def plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant):
         ex_participant: example participant index
     """
 
+    if ex_participant == None:
+        EEG_power = np.mean(EEG_power_norm, 2)
+        fMRI_power = np.mean(fMRI_power_norm, 2)
+        title_EEG = (
+            "EEG power for all network harmonics over time\n(mean over participants)"
+        )
+        title_fMRI = (
+            "fMRI power for all network harmonics over time\n(mean over participants)"
+        )
+    else:
+        EEG_power = EEG_power_norm[:, :, ex_participant]
+        fMRI_power = fMRI_power_norm[:, :, ex_participant]
+        title_EEG = f"EEG power for all network harmonics over time\nfor participant {ex_participant+1}"
+        title_fMRI = f"fMRI power for all network harmonics over time\nfor participant {ex_participant+1}"
+
     plt.subplot(211)
     # EEG power
     map = sns.heatmap(
-        EEG_power_norm,
+        EEG_power,
         cbar_kws={"label": "EEG L2$^2$"},
     )
     map.set_xlabel("time", fontsize=10)
     map.set_ylabel("network harmonic", fontsize=10)
-    plt.title(
-        f"EEG power for all network harmonics over time\n for participant {ex_participant+1}"
-    )
+    plt.title(title_EEG)
     plt.subplot(212)
     # fMRI power
     map = sns.heatmap(
-        fMRI_power_norm,
+        fMRI_power,
         cbar_kws={"label": "fMRI L2$^2$"},
     )
     map.set_xlabel("time", fontsize=10)
     map.set_ylabel("network harmonic", fontsize=10)
-    plt.title(
-        f"fMRI power for all network harmonics over time\n for participant {ex_participant+1}"
-    )
+    plt.title(title_fMRI)
     plt.tight_layout()
     plt.show()
     print(
@@ -332,7 +319,7 @@ def plot_ex_power_EEG_fMRI(EEG_power_norm, fMRI_power_norm, ex_participant):
 
 
 # integrate with other corr plot fct?
-def plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant):
+def plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant=None):
     """
     plots exemplary correlation of EEG and FMRI power (for 1 participant, all harmonics)
     arguments:
@@ -340,16 +327,19 @@ def plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant):
         fMRI_power_norm: fMRI power matrix
         ex_participant: example participant index
     """
-    map = sns.heatmap(
-        corrcoef2D(
-            EEG_power_norm[:, :, ex_participant], fMRI_power_norm[:, :, ex_participant]
-        )
-    )
+    if ex_participant == None:
+        EEG_power = np.mean(EEG_power_norm, 2)
+        fMRI_power = np.mean(EEG_power_norm, 2)
+        title = "correlation of harmonics in fMRI and EEG\n(mean over participants)"
+    else:
+        EEG_power = EEG_power_norm[:, :, ex_participant]
+        fMRI_power = fMRI_power_norm[:, :, ex_participant]
+        title = f"correlation of harmonics in fMRI and EEG for participant {ex_participant+1}"
+
+    map = sns.heatmap(corrcoef2D(EEG_power, fMRI_power))
     map.set_xlabel("EEG ?", fontsize=10)
     map.set_ylabel("fMRI ?", fontsize=10)
-    plt.title(
-        f"correlation of harmonics in fMRI and EEG for participant {ex_participant+1}"
-    )
+    plt.title(title)
     plt.show()
 
 
