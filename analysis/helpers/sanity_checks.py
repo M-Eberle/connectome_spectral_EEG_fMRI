@@ -4,7 +4,7 @@ import seaborn as sns
 from scipy import signal as sg
 import matplotlib.cm as mcm
 
-from helpers.overview_plots import corrcoef2D
+from helpers.general import *
 
 #%% [markdown]
 # EEG sanity check 3: EEG-fMRI
@@ -41,9 +41,7 @@ from helpers.overview_plots import corrcoef2D
 
 # repeat for different time shifts
 # %%
-def compute_alpha_regressor(
-    EEG_timeseries, ex_participant, regionsMap, HRF_resEEG, sampling_freq
-):
+def compute_alpha_regressor(EEG_timeseries, ex_participant, HRF_resEEG, sampling_freq):
     """
     adapted from Schirner et al. (2018) implementation https://github.com/BrainModes/The-Hybrid-Virtual-Brain/blob/master/MATLAB/compute_alpha_regressor.m
     convoluted a-band power fluctuation of injected EEG source activity with canonical hemodynamic response function = alpha regressor
@@ -51,8 +49,8 @@ def compute_alpha_regressor(
     arguments:
         EEG_timeseries: EEG timeseries
         ex_participant: example participant index
-        regionsMap: [68 x 1] vector that contains the region sorting of source
-                    activity as outputted by Brainstorm
+        // not needed bc data is presorted: (regionsMap: [68 x 1] vector that contains the region sorting of source
+                    activity as outputted by Brainstorm )
         HRF_resEEG: [1 x 6498] vector that contains the hemodynamic
                     response function sampled at 200 Hz
         sampling_freq: EEG sampling frequency
@@ -63,19 +61,6 @@ def compute_alpha_regressor(
                     effects from filtering and from convolution with HRF)
     """
     source_activity = EEG_timeseries[:, :, ex_participant]
-    # Sorting of Desikan-Killiany atlas regions in SC matrices
-    # use sorting also for everything else?
-    SCmat_sorting = np.concatenate(
-        np.array(
-            (
-                np.arange(1001, 1003 + 1),
-                np.arange(1005, 1035 + 1),
-                np.arange(2001, 2003 + 1),
-                np.arange(2005, 2035 + 1),
-            ),
-            dtype=object,
-        )
-    ).ravel()
 
     # Generate butterworth filter for alpha range and for resting-state
     # slow oscillations range
@@ -97,12 +82,6 @@ def compute_alpha_regressor(
 
     # Iterate over regions
     for region in np.arange(68):
-
-        """
-        # Get SC matrix sorting
-        regindSAC = np.argwhere(regionsMap == SCmat_sorting[region])
-        print(f"regindSAC: {regindSAC}, region: {region}")
-        """
         # use presorted EEG data
         region_ts = source_activity[region, :]
 
@@ -148,7 +127,7 @@ def compute_alpha_regressor(
     return alpha_reg.T, alpha_reg_filt.T
 
 
-def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, sampling_freq):
+def compute_power_timeseries(EEG_timeseries, ex_participant, sampling_freq):
     """
     adapted from Schirner et al. (2018) implementation https://github.com/BrainModes/The-Hybrid-Virtual-Brain/blob/master/MATLAB/compute_alpha_regressor.m
     a-band power fluctuation of injected EEG source activity
@@ -156,26 +135,14 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
     arguments:
         EEG_timeseries: EEG timeseries
         ex_participant: example participant index
-        regionsMap: [68 x 1] vector that contains the region sorting of source
-                    activity as outputted by Brainstorm
+        // not needed bc data is presorted: (regionsMap: [68 x 1] vector that contains the region sorting of source
+                    activity as outputted by Brainstorm )
 
     returns:
         alpha_reg: alpha regressor (edges are discarded)
         alpha_reg_filt: filtered alpha regressor (edges are discarded)
     """
     source_activity = EEG_timeseries[:, :, ex_participant]
-    # Sorting of Desikan-Killiany atlas regions in SC matrices
-    SCmat_sorting = np.concatenate(
-        np.array(
-            (
-                np.arange(1001, 1003 + 1),
-                np.arange(1005, 1035 + 1),
-                np.arange(2001, 2003 + 1),
-                np.arange(2005, 2035 + 1),
-            ),
-            dtype=object,
-        )
-    ).ravel()
 
     # Generate butterworth filter for alpha range and for resting-state
     # slow oscillations range
@@ -198,10 +165,6 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
     # Iterate over regions
     for region in np.arange(68):
 
-        """
-        # Get SC matrix sorting
-        regindSAC = np.argwhere(regionsMap == SCmat_sorting[region])
-        """
         # use presorted EEG data
         region_ts = source_activity[region, :]
 
@@ -240,17 +203,6 @@ def compute_power_timeseries(EEG_timeseries, ex_participant, regionsMap, samplin
         )
 
     return alpha_power.T, alpha_power_filt.T
-
-
-def normalize_data(data):
-    """
-    normalizes data between 0 and 1
-    arguments:
-        data: data to be normalized
-    return:
-        normalized data
-    """
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
 
 
 def plot_alpha_reg_power_fMRI(
@@ -303,9 +255,7 @@ def plot_alpha_reg_power_fMRI(
     plt.show()
 
 
-def alpha_mean_corrs(
-    fMRI_timeseries, EEG_timeseries, regionsMap, HRF_resEEG, sampling_freq=200
-):
+def alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, HRF_resEEG, sampling_freq=200):
     """
     For every particpant, the correlation between
     - alpha regressor and fMRI timeseries
@@ -319,8 +269,6 @@ def alpha_mean_corrs(
     arguments:
         fMRI_timeseries: fMRI timeseries (NOT interpolated)
         EEG_timeseries: EEG timeseries
-        regionsMap: [68 x 1] vector that contains the region sorting of source
-                    activity as outputted by Brainstorm
         HRF_resEEG: [1 x 6498] vector that contains the hemodynamic
                     response function sampled at 200 Hz
         sampling_freq: EEG sampling frequency
@@ -344,12 +292,12 @@ def alpha_mean_corrs(
 
         # with HRF convolution:
         alpha_reg, alpha_reg_filt = compute_alpha_regressor(
-            EEG_timeseries, participant, regionsMap, HRF_resEEG, sampling_freq
+            EEG_timeseries, participant, HRF_resEEG, sampling_freq
         )
 
         # without HRF convolution but cut edges:
         alpha_power, alpha_power_filt = compute_power_timeseries(
-            EEG_timeseries, participant, regionsMap, sampling_freq
+            EEG_timeseries, participant, sampling_freq
         )
 
         uncut = fMRI_curr.shape[1]
@@ -429,6 +377,7 @@ def alpha_mean_corrs(
         mean_power_all,
         shifts_reg,
         shifts_power,
+        max_shift,
     )
 
 
@@ -467,3 +416,23 @@ def plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power):
         "comparison of chosen shift for correlation between fMRI and\nEEG alpha regressor vs band power for all participants"
     )
     plt.show()
+
+
+def plot_alpha_corr(all_corrs_reg, all_corrs_power, max_shift):
+    min = np.min((np.min(all_corrs_reg), np.min(all_corrs_power)))
+    max = np.max((np.max(all_corrs_reg), np.max(all_corrs_power)))
+    for s in np.arange(max_shift):
+        sns.heatmap(all_corrs_reg[:, :, s], vmin=min, vmax=max)
+        plt.xlabel("participant idx")
+        plt.ylabel("region")
+        plt.title(
+            f"EEG-fMRI over regions and subjects for shift {s+1}\nalpha regressor"
+        )
+        plt.show()
+        sns.heatmap(all_corrs_power[:, :, s], vmin=min, vmax=max)
+        plt.xlabel("participant idx")
+        plt.ylabel("region")
+        plt.title(
+            f"EEG-fMRI over regions and subjects for shift {s+1}\nalpha powerband"
+        )
+        plt.show()

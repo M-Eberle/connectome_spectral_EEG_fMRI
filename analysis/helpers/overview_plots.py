@@ -5,29 +5,7 @@ from matplotlib.lines import Line2D
 from scipy import signal as sg
 
 
-def corrcoef2D(A, B):
-    """
-    from https://stackoverflow.com/questions/30143417/computing-the-correlation-coefficient-between-two-multi-dimensional-arrays
-    """
-    # Rowwise mean of input arrays & subtract from input arrays themeselves
-    A_mA = A - A.mean(1)[:, None]
-    B_mB = B - B.mean(1)[:, None]
 
-    # Sum of squares across rows
-    ssA = (A_mA**2).sum(1)
-    ssB = (B_mB**2).sum(1)
-
-    # Finally get corr coeff
-    return np.dot(A_mA, B_mB.T) / np.sqrt(np.dot(ssA[:, None], ssB[None]))
-    """
-    example:
-    a = np.array(([1, 3, 7], [1, 2, 7]))
-    b = np.array(([1, 3, 5], [1, 3, 7]))
-
-    print(f"a:\n{a}\nb:\n{b}")
-
-    print(f"row-wise corr:\n{corrcoef2D(a, b)}")
-    """
 
 
 def plot_ex_interp(timeseries, timeseries_interp, ex_participant, ex_harmonic):
@@ -203,7 +181,7 @@ def ex_EEG_fMRI_corr(EEG_timeseries, fMRI_timeseries, ex_participant, mode, plot
     return fMRI_EEG_corr
 
 
-def plot_power_stem(power_norm, mode, ex_participant=None):
+def plot_power_stem(power_norm, mode, ex_participant=None, start=0):
     """
     plots mean power over time (1 participant, all harmonics)
     arguments:
@@ -227,8 +205,8 @@ def plot_power_stem(power_norm, mode, ex_participant=None):
     # does this make sense with a mean over time? -> analogous to EEG/fMRI power plots above, otherwise timesteps instead of harmonics are important
     # normalize power vector to 1 --> normalize power to 1 at every point in time????
     # normalize power at every time point? and then also divide by number of regions?
-
-    plt.stem(power_mean)
+    x = np.arange(start, start + len(power_mean))
+    plt.stem(power_mean, label=np.array2string(x))
     plt.xlabel("harmonic")
     plt.ylabel("signal strength")
     plt.title(title)
@@ -329,7 +307,7 @@ def plot_power_corr(EEG_power_norm, fMRI_power_norm, ex_participant=None):
     """
     if ex_participant == None:
         EEG_power = np.mean(EEG_power_norm, 2)
-        fMRI_power = np.mean(EEG_power_norm, 2)
+        fMRI_power = np.mean(fMRI_power_norm, 2)
         title = "correlation of harmonics in fMRI and EEG\n(mean over participants)"
     else:
         EEG_power = EEG_power_norm[:, :, ex_participant]
@@ -371,6 +349,20 @@ def plot_fft_welch(signal, sampling_freq):
     plt.legend()
     plt.show()
     return freqs, psd
+
+
+def plot_vertex_vs_graph_corr(regions_all_corrs, harmonics_all_corrs):
+    min = np.min((np.min(regions_all_corrs), np.min(harmonics_all_corrs)))
+    max = np.max((np.max(regions_all_corrs), np.max(harmonics_all_corrs)))
+    sns.heatmap(regions_all_corrs, vmin=min, vmax=max)
+    plt.xlabel("participant idx")
+    plt.ylabel("region")
+    plt.title("EEG-fMRI correlation within regions")
+    plt.show()
+    sns.heatmap(harmonics_all_corrs, vmin=min, vmax=max)
+    plt.xlabel("participant idx")
+    plt.ylabel("harmonic")
+    plt.title("EEG-fMRI correlation within harmonics")
 
 
 # plot brain surfaces

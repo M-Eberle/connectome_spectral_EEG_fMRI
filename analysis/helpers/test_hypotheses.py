@@ -1,24 +1,9 @@
 import numpy as np
 from helpers.overview_plots import ex_EEG_fMRI_corr
-from scipy.stats import ttest_ind
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-
-def ttest_greater(a, b, context):
-    tick_labels, y_label, title = context
-    means = (np.mean(a), np.mean(b))
-    stds = (np.std(a), np.std(b))
-    plt.bar(
-        (1, 2),
-        means,
-        yerr=stds,
-        capsize=10,
-        tick_label=tick_labels,
-    )
-    plt.ylabel(y_label)
-    plt.title(title)
-    results = ttest_ind(a, b, alternative="greater")
-    return results
+from helpers.general import *
 
 
 def vertex_vs_graph(
@@ -66,7 +51,7 @@ def vertex_vs_graph(
         mean_regions_corrs[participant] = mean_reg
         mean_harmonics_corrs[participant] = mean_harmonic
 
-    # ttets??
+    # t-tets?
     ttest_results = ttest_greater(
         mean_regions_corrs,
         mean_harmonics_corrs,
@@ -127,6 +112,8 @@ def TV(G, signal):
     """
     # normalize adjacency matrix
     A = normalize_adjacency(G.W)
+    # normalize within every participant?
+    signal = normalize_data(signal)
     TV = np.linalg.norm(signal - A @ signal) / G.N
     return TV
 
@@ -201,12 +188,14 @@ def simi_JET(G1, G2, signal1, signal2, gamma=0.5):
     return JET
 
 
-def simi_betw_participants(Gs, simi_measure, measure_name, mode=None, timeseries=None):
+def simi_betw_participants(
+    Gs, simi_measure, measure_name, N, mode=None, timeseries=None
+):
     simi = np.zeros((N, N))
     for participant1 in np.arange(N):
         for participant2 in np.arange(N):
             if participant1 <= participant2:
-                if timeseries != None:
+                if timeseries is not None:
                     simi[participant1, participant2] = simi_measure(
                         Gs[participant1],
                         Gs[participant2],
