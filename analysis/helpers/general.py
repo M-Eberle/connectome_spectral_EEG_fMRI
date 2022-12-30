@@ -39,8 +39,9 @@ def normalize_data_sum(data, axis=None):
         norm_data = data / np.sum(data)
     else:
         data_min = np.min(data, axis=axis)
-        if data_min < 0:
-            data = data - data_min
+        # if data_min < 0:
+        #    data = data - data_min
+        data = np.where(data_min < 0, data - data_min, data)
         norm_data = data / np.sum(data, axis=axis)
     return norm_data
 
@@ -108,6 +109,7 @@ def ttest_greater(a, b, context):
     plt.title(title)
     plt.plot()
     plt.show()
+    plt.savefig(f"../results/hypotheses/ttest_{title}.png")
     results = ttest_ind(a, b, alternative="greater")
     return results
 

@@ -6,6 +6,42 @@ import matplotlib.cm as mcm
 
 from helpers.general import *
 
+
+# EEG sanity check 2: EEG power spectral density
+# ________________________
+
+
+def plot_fft_welch(signal, sampling_freq):
+    """
+    adapted from https://raphaelvallat.com/bandpower.html
+    plot normalized power spectral density (Welch method)
+    arguments:
+        signal: signal data, 1 dimensional
+        sampling_freq: sampling frequency [Hz]
+    returns:
+        freqs: Array of sample frequencies
+        psd: power spectral density of signal
+    """
+    sampling_freq = 200  # Hz
+
+    # Define window length (4 seconds)
+    win = 2 * sampling_freq
+    freqs, psd = sg.welch(signal, sampling_freq, nperseg=win)
+    psd = psd / np.linalg.norm(psd)
+    plt.plot(freqs[freqs != 0], 1 / freqs[freqs != 0], label="1/f")  # scaling?
+    # plt.semilogy(freqs, psd)
+    plt.plot(freqs, psd)  # scaling?
+    plt.xlabel("frequency [Hz]")
+    plt.ylabel("normalized power spectral density [a.u./Hz ?]")
+    # plt.ylim([0, psd.max() * 1.1])
+    plt.xlim([1, 60])  # cutoff where high-/lowpass filters were applied
+    plt.title("Welch's periodogram")
+    plt.legend()
+    plt.show()
+    plt.savefig("../results/sanity_checks/power_spectral_density.png")
+    return freqs, psd
+
+
 #%% [markdown]
 # EEG sanity check 3: EEG-fMRI
 # ________________________
@@ -41,6 +77,8 @@ from helpers.general import *
 
 # repeat for different time shifts
 # %%
+
+
 def compute_alpha_regressor(EEG_timeseries, ex_participant, HRF_resEEG, sampling_freq):
     """
     adapted from Schirner et al. (2018) implementation https://github.com/BrainModes/The-Hybrid-Virtual-Brain/blob/master/MATLAB/compute_alpha_regressor.m

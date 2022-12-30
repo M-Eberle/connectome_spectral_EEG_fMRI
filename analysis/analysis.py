@@ -41,17 +41,15 @@ from helpers import *
 
 
 # %%
-
-
 class Data:
     # fix docstrings
     """
     class for all data and methods for generation of overview plots and data analysis
     """
 
-    def __init__(self, mode, loop_participants=True, loop_regions=True):
+    def __init__(self, SC_mode, loop_participants=True, loop_regions=True):
 
-        self.mode = mode
+        self.mode = SC_mode
         self.loop_participants = loop_participants
         self.loop_regions = loop_regions
 
@@ -546,6 +544,9 @@ class Data:
             ],
         )
 
+    # _______________________
+    # below: currently only for individual SCs
+
     def get_GE(self):
         simi_betw_participants(self.Gs, simi_GE, "GE", self.N)
 
@@ -561,87 +562,46 @@ class Data:
             self.Gs, simi_JET, "JET", self.N, self.modality, self.trans_timeseries
         )
 
+    # 3D plots on graphs
+    @loop_participants
+    @loop_modalities
+    def plot_signal_on_graph(self):
+        plot_ex_graphs_3D(
+            self.Gs, self.trans_timeseries, self.ex_participant, self.modality
+        )
+
+    @loop_participants
+    def plot_evecs_on_graph(self):
+        plot_ex_evecs_3D(self.Gs, self.ex_participant)
+
 
 # %%
-mode = "mean"  # 'mean' or 'ind'
-# data_mean = data('mean')
-data_ind = Data(mode="ind", loop_participants=False)
+# currently, some plots/calculations only work for individual SC matrices
+SC_mode = "ind"  # 'mean' or 'ind'
+data_ind = Data(SC_mode=SC_mode, loop_participants=False)
 
 # %%
+# overview plots
 # data_ind.plot_signal()
 # data_ind.plot_signal_single_domain()
 # data_ind.plot_domain()
 # data_ind.plot_power_stem_cum()
-# data_ind.plot_power_mean_stem_cum()
 # data_ind.plot_power_corr()
+
+# sanity checks for EEG
+# sanity check 1
 # data_ind.plot_power_mean_corr()
+# data_ind.plot_power_mean_stem_cum()
+# sanity check 2
 # data_ind.plot_EEG_freq_band()
+# sanity check 3
 # data_ind.get_alpha_corrs()
 # data_ind.plot_alpha_corrs()
+
+# hypotheses
 # data_ind.get_vertex_vs_graph()
 # data_ind.plot_vertex_vs_graph()
 # data_ind.get_lower_vs_upper_harmonics()
 # data_ind.get_GE()
-data_ind.get_TVG()
+# data_ind.get_TVG()
 # data_ind.get_JET()
-
-# %%
-# ____________________________
-# everything below has to be rewritten for data class
-
-
-# plot signal on graph
-plot_ex_graphs_3D(Gs, trans_EEG_timeseries, ex_participant, "EEG")
-plot_ex_graphs_3D(Gs, trans_fMRI_timeseries, ex_participant, "fMRI")
-
-
-# plot eigenvectors on graphs
-
-N_plots = 3
-
-fig, axes = plt.subplots(1, N_plots, figsize=(10, 3), subplot_kw=dict(projection="3d"))
-for t, ax in enumerate(axes):
-    G.plot_signal(
-        G.U[:, t],
-        vertex_size=30,
-        show_edges=True,
-        ax=ax,
-        colorbar=False,
-    )
-    ax.set_title(f"harmonic {t + 1}")
-    ax.axis("off")
-    plt.suptitle(f"first {N_plots} harmonics")
-fig.tight_layout()
-plt.show()
-
-fig, axes = plt.subplots(1, N_plots, figsize=(10, 3), subplot_kw=dict(projection="3d"))
-for t, ax in enumerate(axes):
-    G.plot_signal(
-        G.U[:, -(t + 1)],
-        vertex_size=30,
-        show_edges=True,
-        ax=ax,
-        colorbar=False,
-    )
-    ax.set_title(f"harmonic {68 -t}")
-    ax.axis("off")
-    plt.suptitle(f"last {N_plots} harmonics")
-fig.tight_layout()
-plt.show()
-
-
-# %%
-fig, axes = plt.subplots(1, N_plots, figsize=(10, 3), subplot_kw=dict(projection="3d"))
-for t, ax in enumerate(axes):
-    G.plot_signal(
-        G.U[:, t + 30],
-        vertex_size=30,
-        show_edges=True,
-        ax=ax,
-        colorbar=False,
-    )
-    ax.set_title(f"harmonic {t+31}")
-    ax.axis("off")
-    plt.suptitle(f"last {N_plots} harmonics")
-fig.tight_layout()
-plt.show()
