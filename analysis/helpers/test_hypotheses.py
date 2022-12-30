@@ -42,8 +42,11 @@ def vertex_vs_graph(
         # only consider same regions/ harmonics
         regions_all_corrs[:, participant] = np.diag(regions_corr)
         harmonics_all_corrs[:, participant] = np.diag(harmonics_corr)
-        mean_reg = np.mean(np.abs(regions_all_corrs[:, participant]))
-        mean_harmonic = np.mean(np.abs(harmonics_all_corrs[:, participant]))
+        # abs before mean?
+        mean_reg = np.mean(Fisher_transf(np.abs(regions_all_corrs[:, participant])))
+        mean_harmonic = np.mean(
+            Fisher_transf(np.abs(harmonics_all_corrs[:, participant]))
+        )
 
         print(
             f"participant {participant+1} regions diag: {np.round(mean_reg, 4)}, harmonics diag: {np.round(mean_harmonic, 4)}"
@@ -83,6 +86,7 @@ def normalize_adjacency(W):
     returns:
         A (np.array): degree-normalized adjacency matrix
     """
+    print("start norm")
     n, m = W.shape
     # Check that the matrix is square
     assert n == m
@@ -95,6 +99,7 @@ def normalize_adjacency(W):
     for i in np.arange(n):  # np.diag did not work bc d cannot be squeezed/flattened
         D[i, i] = d[i, 0]
     # Return the Normalized Adjacency
+    print("end norm")
     return D @ W @ D
 
 
@@ -110,10 +115,14 @@ def TV(G, signal):
     returns:
         TV: total variation
     """
+    print("testTV")
     # normalize adjacency matrix
     A = normalize_adjacency(G.W)
     # normalize each timestep within each participant
-    signal = normalize_data_minmax(signal, axis=0)
+    # signal = normalize_data_minmax(signal, axis=0)
+    # print("minmax")
+    signal = normalize_data_sum(signal, axis=0)
+    print("sum")
     TV = np.linalg.norm(signal - A @ signal) / G.N
     return TV
 
@@ -145,6 +154,7 @@ def LE(G):
     returns:
         TV: total variation
     """
+    print("testLE")
     # LE = np.sum(np.abs(G.e - 2 * G.Ne / G.N)) use normalized Laplacian for eigenvalues instead
     A = normalize_adjacency(G.W)
     norm_L = np.eye(A.shape[0]) - A  # normalized L = I - normalized A

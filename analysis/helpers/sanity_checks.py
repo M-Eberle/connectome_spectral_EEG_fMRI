@@ -325,9 +325,8 @@ def alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, HRF_resEEG, sampling_freq=
             # plot corr_reg
 
             # ? take mean over all region correlations
-            # np.abs before mean
-            # transform arctanh? / fischer z transform
-            mean_reg = np.mean(corr_reg)
+            # np.abs before mean?
+            mean_reg = np.mean(Fisher_transf(corr_reg))
 
             if np.abs(mean_reg) > np.abs(mean_reg_all[participant]):
                 mean_reg_all[participant] = mean_reg
@@ -338,8 +337,9 @@ def alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, HRF_resEEG, sampling_freq=
             corr_power = np.diagonal(
                 corrcoef2D(fMRI_curr[:, s : uncut - (max_shift - s)], alpha_power_filt)
             )
+            # again: abs before mean>
             all_corrs_power[:, participant, s] = corr_power
-            mean_power = np.mean(corr_power)
+            mean_power = np.mean(Fisher_transf(corr_power))
 
             if np.abs(mean_power) > np.abs(mean_power_all[participant]):
                 mean_power_all[participant] = mean_power

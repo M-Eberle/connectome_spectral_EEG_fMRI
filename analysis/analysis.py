@@ -28,18 +28,21 @@ from helpers import *
 # - compare graph vs vertex domain: corr EEG-fMRI
 # - plot signal on graph
 # - compare patterns between participants
-### next steps
-# - compare timeseries EEG & fMRI (e.g. lower vs higehr half of harmonics)
-# - Fischer TRansform instead of mean for correlations
+# - data in numpy arrays instead of lists
+# - general refactoring
 # - scale timeseries before applying similarity measures
+# - compare timeseries EEG & fMRI (e.g. lower vs higehr half of harmonics)
+### next steps
+# - Fischer Transform instead of mean for correlations
 #### other ToDos
 # - fix time axis in all plots
 # - save plots
-# - data in numpy arrays instead of lists
 # - compare scipy.interpolate.interp1d & scipy.signal.resample
-# - general refactoring
+
 
 # %%
+
+
 class Data:
     # fix docstrings
     """
@@ -578,9 +581,9 @@ data_ind = Data(mode="ind", loop_participants=False)
 # data_ind.get_vertex_vs_graph()
 # data_ind.plot_vertex_vs_graph()
 # data_ind.get_lower_vs_upper_harmonics()
-data_ind.get_GE()
+# data_ind.get_GE()
 data_ind.get_TVG()
-data_ind.get_JET()
+# data_ind.get_JET()
 
 # %%
 # ____________________________

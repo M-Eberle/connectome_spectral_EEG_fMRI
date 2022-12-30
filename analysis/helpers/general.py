@@ -16,8 +16,6 @@ def normalize_data_minmax(data, axis=None):
     if axis is None:
         norm_data = (data - np.min(data)) / (np.max(data) - np.min(data))
     else:
-        print(data.shape)
-        print(np.min(data, axis=axis).shape)
         norm_data = (data - np.min(data, axis=axis)) / (
             np.max(data, axis=axis) - np.min(data, axis=axis)
         )
@@ -40,8 +38,6 @@ def normalize_data_sum(data, axis=None):
             data = data - data_min
         norm_data = data / np.sum(data)
     else:
-        print(data.shape)
-        print(np.min(data, axis=axis).shape)
         data_min = np.min(data, axis=axis)
         if data_min < 0:
             data = data - data_min
@@ -73,6 +69,19 @@ def corrcoef2D(A, B):
 
     print(f"row-wise corr:\n{corrcoef2D(a, b)}")
     """
+
+
+# make this a function with mean(fisher_transf(abs(correlation_data))) instead?
+def Fisher_transf(data):
+    """
+    Returns Fisher transformed data.
+    arguments:
+        data
+    returns
+        transf_data: Fisher transformed data
+    """
+    transf_data = np.emath.arctanh(data)
+    return transf_data
 
 
 def ttest_greater(a, b, context):
