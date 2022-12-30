@@ -78,7 +78,6 @@ def normalize_adjacency(W):
     """
     -> adapted from https://www.programcreek.com/python/?CodeExample=normalize+adjacency, Project: graph-neural-networks Author: alelab-upenn
     Computes the degree-normalized adjacency matrix
-
     arguments:
         W (np.array): adjacency matrix
     returns:
@@ -104,16 +103,17 @@ def TV(G, signal):
     -> based on Bay-Ahmed et al., 2017
     Calculates the Total Variation of a signal on a graph normalized by the number of nodes.
     Degree-normalized adjacency matrix and L2 norm are used.
+    The signal is also normalized (not mentioned in Bay-Ahmed et al.).
     arguments:
         G: graph (pygsp object)
-        signal: data matrix (nodes x timepoints)
+        signal: data matrix (nodes x timepoints, for one participant)
     returns:
         TV: total variation
     """
     # normalize adjacency matrix
     A = normalize_adjacency(G.W)
-    # normalize within every participant?
-    signal = normalize_data(signal)
+    # normalize each timestep within each participant
+    signal = normalize_data_minmax(signal, axis=0)
     TV = np.linalg.norm(signal - A @ signal) / G.N
     return TV
 
@@ -128,7 +128,6 @@ def simi_TVG(G1, G2, signal1, signal2):
         G2: second graph (pygsp object)
         signal1: data matrix for G1 (nodes x timepoints)
         signal2: data matrix for G2 (nodes x timepoints)
-        q: used for q-norm
     returns:
         TVG: similarity measure based on total variation
     """
@@ -140,12 +139,18 @@ def LE(G):
     """
     -> based on Bay-Ahmed et al., 2017
     Calculates Laplacian graph energy.
+    Here, the normalized Laplacian is used (not specified in Bay-Ahmed et al.).
     arguments:
         G: graph (pygsp object)
     returns:
         TV: total variation
     """
-    LE = np.sum(np.abs(G.e - 2 * G.Ne / G.N))
+    # LE = np.sum(np.abs(G.e - 2 * G.Ne / G.N)) use normalized Laplacian for eigenvalues instead
+    A = normalize_adjacency(G.W)
+    norm_L = np.eye(A.shape[0]) - A  # normalized L = I - normalized A
+    evals, evecs = np.linalg.eigh(norm_L)  # use eigh because norm_L is symmetric?
+    LE = np.sum(np.abs(evals - 2 * G.Ne / G.N))
+
     return LE
 
 
@@ -199,8 +204,8 @@ def simi_betw_participants(
                     simi[participant1, participant2] = simi_measure(
                         Gs[participant1],
                         Gs[participant2],
-                        timeseries[participant1],
-                        timeseries[participant2],
+                        timeseries[:, :, participant1],
+                        timeseries[:, :, participant2],
                     )
                 else:
                     simi[participant1, participant2] = simi_measure(

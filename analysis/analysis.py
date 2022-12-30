@@ -40,52 +40,8 @@ from helpers import *
 # - general refactoring
 
 # %%
-
-
-def _loop_participants(func):
-    def wrapper(*args):
-        if args[0].loop_participants:
-            for participant in np.arange(args[0].N):
-                args[0].ex_participant = participant
-                func(*args)
-        else:
-            func(*args)
-
-    return wrapper
-
-
-def _loop_regions(func):
-    def wrapper(*args):
-        if args[0].loop_regions:
-            for region in np.arange(args[0].N_regions):
-                args[0].ex_region = region
-                func(*args)
-        else:
-            func(*args)
-
-    return wrapper
-
-
-def _loop_domains(func):
-    def wrapper(*args):
-        for domain in args[0].domains:
-            args[0].domain = domain
-            func(*args)
-
-    return wrapper
-
-
-def _loop_modalities(func, interp=True):
-    def wrapper(*args):
-        for modality in args[0].modalities:
-            args[0].modality = modality
-            args[0].choose_modality_data(modality, interp)
-            func(*args)
-
-    return wrapper
-
-
 class Data:
+    # fix docstrings
     """
     class for all data and methods for generation of overview plots and data analysis
     """
@@ -164,6 +120,9 @@ class Data:
         self.harmonics_all_corrs = None
         self.mean_regions_corrs = None
         self.mean_harmonics_corrs = None
+        self.GE = None
+        self.TVG = None
+        self.JET = None
         # for sanity checks
         self.all_corrs_reg = None
         self.all_corrs_power = None
@@ -223,6 +182,27 @@ class Data:
 
     def __get_raw_functional_data(self):
 
+        """
+        SC matrices, EEG and fMRI timeseries from ‘Hybrid Brain Model data’ in data folder
+        are extracted for all participants. The EEG data is sorted according to the SC matrices & fMRI data.
+        The fMRI data is interpolated (stretched) to fit the length of the EEG data.
+        The EEG and interpolated fMRI timeseries are transformed by the SC graph's
+        Laplacian's eigenvectors.
+        arguments:
+            SC_path: path to SC matrices file
+            EEG_data_path: path to EEG data file
+            fMRI_data_path: path to fMRI data file
+            EEG_regions_path: path to file with EEG region sorting
+            coords: coordinates for graph nodes
+        returns:
+            mean_SC_weights: mean SC matrix
+            G: graph generated from SC matrix
+            EEG_timeseries: list with EEG activity for each participant
+            trans_EEG_timeseries: list with EEG GFT weights for each participant
+            fMRI_timeseries: list with fMRI activity for each participant
+            fMRI_timeseries_interp: list with interpolated fMRI activity for each participant
+            trans_fMRI_timeseries: list with fMRI GFT weights for each participant
+        """
         # load fMRI data
         unflattened_fMRI_data = sio.loadmat(self.fMRI_data_path)["fMRI"]
         fMRI_data = np.ndarray.flatten(unflattened_fMRI_data)
@@ -410,8 +390,8 @@ class Data:
         self.low_harm = low_harm
         self.high_harm = high_harm
 
-    @_loop_participants
-    @_loop_domains
+    @loop_participants
+    @loop_domains
     def plot_signal(self):
         plot_ex_signal_EEG_fMRI(
             self.EEG_timeseries,
@@ -420,9 +400,9 @@ class Data:
             self.domain,
         )
 
-    @_loop_participants
-    @_loop_regions
-    @_loop_domains
+    @loop_participants
+    @loop_regions
+    @loop_domains
     def plot_signal_single_domain(self):
         plot_ex_signal_fMRI_EEG_one(
             self.EEG_timeseries,
@@ -432,15 +412,15 @@ class Data:
             self.domain,
         )
 
-    @_loop_participants
-    @_loop_modalities
+    @loop_participants
+    @loop_modalities
     def plot_domain(self):
         plot_ex_regions_harmonics(
             self.timeseries, self.trans_timeseries, self.ex_participant, self.modality
         )
 
-    @_loop_participants
-    @_loop_modalities
+    @loop_participants
+    @loop_modalities
     def plot_power_stem_cum(self, low_harm=0, high_harm=68):
         """
         Plot power per harmonic and cumulative power for individual participant(s)
@@ -450,7 +430,7 @@ class Data:
         plot_power_stem(self.power, self.modality, self.ex_participant)
         plot_power_cum(self.power, self.modality, self.ex_participant)
 
-    @_loop_modalities
+    @loop_modalities
     def plot_power_mean_stem_cum(self, low_harm=0, high_harm=68):
         """
         EEG sanity check 1: EEG power, mean over participants
@@ -461,7 +441,7 @@ class Data:
         plot_power_stem(self.power, self.modality)
         plot_power_cum(self.power, self.modality)
 
-    @_loop_participants
+    @loop_participants
     def plot_power_corr(self, low_harm=0, high_harm=68):
         """
         Plot power over time and power correlation for fMRI and EEG for individual participant(s)
@@ -516,7 +496,11 @@ class Data:
 
     # _______
     def get_vertex_vs_graph(self):
-        # compare vertex vs graph domain: correlation between EEG & fMRI
+        """
+        Compares vertex vs graph domain: correlation between EEG & fMRI.
+        returns:
+            ttest_results: result of ttests for correlations between EEG & fMRI in vertex vs graph domain
+        """
         (
             self.regions_all_corrs,
             self.harmonics_all_corrs,
@@ -532,12 +516,15 @@ class Data:
         return ttest_results
 
     def plot_vertex_vs_graph(self):
+        """
+        Plots correlation between EEG and fMRI in vertex (regions) and graph
+        """
         plot_vertex_vs_graph_corr(self.regions_all_corrs, self.harmonics_all_corrs)
 
-    @_loop_modalities
+    @loop_modalities
     def get_lower_vs_upper_harmonics(self):
         """
-        compare lower vs upper half of harmonics
+        Compares lower vs upper half of harmonics.
         """
         half = int(self.N_regions / 2)
         power_low = self.get_power(0, half)
@@ -559,13 +546,13 @@ class Data:
     def get_GE(self):
         simi_betw_participants(self.Gs, simi_GE, "GE", self.N)
 
-    @_loop_modalities
+    @loop_modalities
     def get_TVG(self):
         simi_betw_participants(
             self.Gs, simi_TVG, "TVG", self.N, self.modality, self.trans_timeseries
         )
 
-    @_loop_modalities
+    @loop_modalities
     def get_JET(self):
         simi_betw_participants(
             self.Gs, simi_JET, "JET", self.N, self.modality, self.trans_timeseries
@@ -594,7 +581,6 @@ data_ind = Data(mode="ind", loop_participants=False)
 data_ind.get_GE()
 data_ind.get_TVG()
 data_ind.get_JET()
-
 
 # %%
 # ____________________________

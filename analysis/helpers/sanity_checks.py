@@ -231,15 +231,18 @@ def plot_alpha_reg_power_fMRI(
         max_shift: length of cut edges of fMRI timeseries
     """
     # plot normalized alpha regressor and data for region with lowest / highest abs correlation
+    # normalize sum or minmax?
     best_region = np.argmax(np.abs(corr))  # or random region?
     max_time = 100
-    plt.plot(normalize_data(alpha[best_region, :max_time]), label=f"alpha {mode}")
     plt.plot(
-        normalize_data(alpha_filt[best_region, :max_time]),
+        normalize_data_minmax(alpha[best_region, :max_time]), label=f"alpha {mode}"
+    )
+    plt.plot(
+        normalize_data_minmax(alpha_filt[best_region, :max_time]),
         label=f"alpha {mode} filt",
     )
     plt.plot(
-        normalize_data(
+        normalize_data_minmax(
             fMRI_timeseries[
                 best_region, shift : uncut - (max_shift - shift), ex_participant
             ][:max_time]
@@ -419,6 +422,10 @@ def plot_compare_alpha(mean_reg_all, mean_power_all, shifts_reg, shifts_power):
 
 
 def plot_alpha_corr(all_corrs_reg, all_corrs_power, max_shift):
+    """
+    plots heatmaps for correlations over all participants and regions for all time shifts between
+    alpha regressor / alpha power band and fMRI
+    """
     min = np.min((np.min(all_corrs_reg), np.min(all_corrs_power)))
     max = np.max((np.max(all_corrs_reg), np.max(all_corrs_power)))
     for s in np.arange(max_shift):

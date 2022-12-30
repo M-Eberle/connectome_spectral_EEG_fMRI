@@ -5,9 +5,6 @@ from matplotlib.lines import Line2D
 from scipy import signal as sg
 
 
-
-
-
 def plot_ex_interp(timeseries, timeseries_interp, ex_participant, ex_harmonic):
     """
     plots exemplary timeseries and interpolated timeseries for comparison (for 1 participant, 1 harmonic)
@@ -352,6 +349,12 @@ def plot_fft_welch(signal, sampling_freq):
 
 
 def plot_vertex_vs_graph_corr(regions_all_corrs, harmonics_all_corrs):
+    """
+    Plots heatmaps of correlation between EEG and fMRI in vertex (regions) and graph (harmonics) domain.
+    arguments:
+        regions_all_corrs: correlations over participants and regions
+        harmonics_all_corrs: correlations over participants and harmonics
+    """
     min = np.min((np.min(regions_all_corrs), np.min(harmonics_all_corrs)))
     max = np.max((np.max(regions_all_corrs), np.max(harmonics_all_corrs)))
     sns.heatmap(regions_all_corrs, vmin=min, vmax=max)
