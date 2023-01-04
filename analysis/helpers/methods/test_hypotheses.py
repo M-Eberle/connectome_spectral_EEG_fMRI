@@ -43,10 +43,8 @@ def vertex_vs_graph(
         regions_all_corrs[:, participant] = np.diag(regions_corr)
         harmonics_all_corrs[:, participant] = np.diag(harmonics_corr)
         # abs before mean?
-        mean_reg = np.mean(Fisher_transf(np.abs(regions_all_corrs[:, participant])))
-        mean_harmonic = np.mean(
-            Fisher_transf(np.abs(harmonics_all_corrs[:, participant]))
-        )
+        mean_reg = mean_corr(np.abs(regions_all_corrs[:, participant]))
+        mean_harmonic = mean_corr(np.abs(harmonics_all_corrs[:, participant]))
 
         print(
             f"participant {participant+1} regions diag: {np.round(mean_reg, 4)}, harmonics diag: {np.round(mean_harmonic, 4)}"
@@ -118,8 +116,8 @@ def TV(G, signal):
 
     # normalize each timestep within each participant
     # which normalization???
-    # signal = normalize_data_minmax(signal, axis=0)
-    signal = normalize_data_sum(signal, axis=0)
+    signal = normalize_data_minmax(signal, axis=0)
+    # signal = normalize_data_sum(signal, axis=0)
 
     TV = np.linalg.norm(signal - A @ signal) / G.N
     return TV
@@ -176,7 +174,7 @@ def simi_GE(G1, G2):
     return GE
 
 
-def simi_JET(G1, G2, signal1, signal2, gamma=0.01):
+def simi_JET(G1, G2, signal1, signal2, gamma=0.001):
     """
     -> based on Bay-Ahmed et al., 2017
     Calculates the similarity of two signals and their graphs through the joint difference of
@@ -194,7 +192,7 @@ def simi_JET(G1, G2, signal1, signal2, gamma=0.01):
 
     TVG = simi_TVG(G1, G2, signal1, signal2)
     GE = simi_GE(G1, G2)
-
+    print(f"gamma = {gamma}")
     JET = gamma * GE - (1 - gamma) * TVG
 
     return JET
@@ -203,6 +201,18 @@ def simi_JET(G1, G2, signal1, signal2, gamma=0.01):
 def simi_betw_participants(
     Gs, simi_measure, measure_name, N, mode=None, timeseries=None
 ):
+    """
+    Calculates a similarity measure between all participants.
+    arguments:
+        Gs: list of graphs for participants
+        simi_measure: function for similarity measure
+        measure_name: name of similarity measure
+        N: number ofp participants
+        mode: data mode, e.g. 'EEG', 'fMRI' or 'random'
+        timeseries: signal timeseries
+    returns:
+        simi: matrix with similarity measure
+    """
     simi = np.zeros((N, N))
     for participant1 in np.arange(N):
         for participant2 in np.arange(N):
@@ -233,3 +243,96 @@ def simi_betw_participants(
         file = f"../results/hypotheses/similarity_measures/{measure_name}.png"
     plt.savefig(file)
     plt.show()
+
+
+def TVG_random_signal(Gs, N_regions, timesteps, N):
+    """
+    Calculates the TVG between all participants for random weights on given graphs.
+    argumnets:
+        Gs: graphs for participants
+        N_regions: number of nodes
+        timesteps: length of signal timeseries
+        N: number of participants
+    returns:
+        TVG: TVG between partiicpant's signal & graphs
+    """
+    random_timeseries = np.random.uniform(0, 1, (N_regions, timesteps, N))
+
+    TVG = simi_betw_participants(
+        Gs, simi_TVG, "TVG", N, "random signal", random_timeseries
+    )
+    return TVG
+
+
+def TVG_random_signal_and_weights(coords, N_regions, timesteps, N):
+    """
+    Calculates the TVG between all participants for random weights and signals on graphs.
+    argumnets:
+        coords: graph coordinates
+        N_regions: number of nodes
+        timesteps: length of signal timeseries
+        N: number of participants
+    returns:
+        TVG: TVG between partiicpant's signal & graphs
+    """
+    random_timeseries = np.random.uniform(0, 1, (N_regions, timesteps, N))
+
+    random_graphs = []
+
+    for participant in np.arange(N):
+        random_weights = np.random.uniform(0, 1, (N_regions, N_regions))
+        np.fill_diagonal(random_weights, 0)
+        random_weights = random_weights + random_weights.T
+
+        random_graph = graphs.Graph(
+            random_weights,
+            lap_type="normalized",
+            coords=coords,
+        )
+        random_graphs.append(random_graph)
+
+    TVG = simi_betw_participants(
+        random_graphs,
+        simi_TVG,
+        "TVG",
+        N,
+        "random signal and weights",
+        random_timeseries,
+    )
+    return TVG
+
+
+def TVG_betw_evecs(Gs, N_regions, ex_participant):
+    """
+    Calculates the TVG between all harmonics.
+    arguments:
+        Gs: list of graphs for participants
+        measure_name: name of similarity measure
+        N_regions: number of haronics
+        ex_participant: example participant index
+    returns:
+        TVG: matrix with TVGs
+    """
+    G = Gs[ex_participant]
+    TVG = np.zeros((N_regions, N_regions))
+    for region1 in np.arange(N_regions):
+        for region2 in np.arange(N_regions):
+            if region1 <= region2:
+                TVG[region1, region2] = simi_TVG(
+                    G,
+                    G,
+                    G.U[:, region1][:, np.newaxis],
+                    G.U[:, region2][:, np.newaxis],
+                )
+            else:
+                TVG[region1, region2] = TVG[region2, region1]
+
+    sns.heatmap(TVG)
+    plt.xlabel("regions")
+    plt.ylabel("regions")
+    plt.title(f"similarity of harmonics for participant {ex_participant +1}")
+    plt.savefig(
+        f"../results/hypotheses/similarity_measures/TVG_evecs_participant_{ex_participant+1}.png"
+    )
+    plt.show()
+    return TVG

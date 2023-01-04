@@ -72,17 +72,23 @@ def corrcoef2D(A, B):
     """
 
 
-# make this a function with mean(fisher_transf(abs(correlation_data))) instead?
-def Fisher_transf(data):
+def mean_corr(corr_data, axis=None):
     """
-    Returns Fisher transformed data.
+    Returns mean of correlation.
+    Data is Fisher transformed, mean taken, and data is transformed back.
     arguments:
-        data
+        corr_data: dataset of corelations
+        axis: axis for mean
     returns
-        transf_data: Fisher transformed data
+        corr_mean: mean of correlation
     """
-    transf_data = np.emath.arctanh(data)
-    return transf_data
+    transf_data = np.emath.arctanh(corr_data)
+    if axis is not None:
+        transf_mean = np.mean(transf_data, axis)
+    else:
+        transf_mean = np.mean(transf_data)
+    corr_mean = np.tanh(transf_mean)
+    return corr_mean
 
 
 def ttest_greater(a, b, context):

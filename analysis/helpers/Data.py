@@ -84,6 +84,8 @@ class Data:
         self.high_harm = None
         self.timeseries = None
         self.trans_timeseries = None
+        self.EEG_power = None
+        self.fMRI_power = None
         self.power = None
         self.regions_all_corrs = None
         self.harmonics_all_corrs = None
@@ -210,10 +212,6 @@ class Data:
             self.ex_participant,
             self.ex_harmonic,
         )
-
-        # variables for analysis
-        self.EEG_power = None
-        self.fMRI_power = None
 
     def __sort_EEG_data(self):
         """
@@ -480,6 +478,12 @@ class Data:
         """
         plot_alpha_corr(self.all_corrs_reg, self.all_corrs_power, self.max_shift)
 
+    @loop_participants
+    def plot_alpha_corrs_on_graph(self):
+        alpha_corrs_on_graph(
+            self.Gs, self.all_corrs_reg, self.all_corrs_power, self.ex_participant
+        )
+
     # _______
     def get_vertex_vs_graph(self):
         """
@@ -536,17 +540,37 @@ class Data:
     # below: currently only for individual SCs
 
     def get_GE(self):
-        simi_betw_participants(self.Gs, simi_GE, "GE", self.N)
+        self.GE = simi_betw_participants(self.Gs, simi_GE, "GE", self.N)
 
     @loop_modalities
     def get_TVG(self):
-        simi_betw_participants(
+        self.TVG = simi_betw_participants(
             self.Gs, simi_TVG, "TVG", self.N, self.modality, self.trans_timeseries
         )
 
+    def get_random_TVG(self, random_weights=True):
+        """
+        Calculate TVG with random signal only or random signal and random weights on graph.
+        arguments:
+            random_weights: if True, weights are also random, if false, only signal is random
+        """
+        if random_weights:
+            random_TVG = TVG_random_signal_and_weights(
+                self.coords, self.N_regions, self.EEG_timesteps, self.N
+            )
+        else:  # only random signal
+            random_TVG = TVG_random_signal(
+                self.Gs, self.N_regions, self.EEG_timesteps, self.N
+            )
+        return random_TVG
+
+    @loop_participants
+    def TVG_evecs(self):
+        TVG_betw_evecs(self.Gs, self.N_regions, self.ex_participant)
+
     @loop_modalities
     def get_JET(self):
-        simi_betw_participants(
+        self.JET = simi_betw_participants(
             self.Gs, simi_JET, "JET", self.N, self.modality, self.trans_timeseries
         )
 

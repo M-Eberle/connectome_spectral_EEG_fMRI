@@ -317,10 +317,13 @@ def alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, HRF_resEEG, sampling_freq=
                     response function sampled at 200 Hz
         sampling_freq: EEG sampling frequency
     returns:
+        all_corrs_reg: correlations (regressor-fMRI) for all regions, participants and shift
+        all_corrs_power: correlations (powerband-fMRI) for all regions, participants and shift
         mean_reg_all: lowest mean of correlations for alpha regressors for each partiicpant
         mean_power_all: lowest mean of correlations for alpha band power for each partiicpant
         shifts_reg: corresponding shifts for mean_reg_all
         shifts_power: corresponding shifts for mean_reg_all
+        max_shift: length difference between alpha component and fMRI signal
     """
 
     N_regions, N_timesteps, N = fMRI_timeseries.shape
@@ -365,9 +368,9 @@ def alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, HRF_resEEG, sampling_freq=
             all_corrs_reg[:, participant, s] = corr_reg
             # plot corr_reg
 
-            # ? take mean over all region correlations
-            # np.abs before mean?
-            mean_reg = np.mean(Fisher_transf(corr_reg))
+            # get mean with Fisher transform
+            # use abs values?
+            mean_reg = mean_corr(corr_reg)
 
             if np.abs(mean_reg) > np.abs(mean_reg_all[participant]):
                 mean_reg_all[participant] = mean_reg
@@ -378,9 +381,10 @@ def alpha_mean_corrs(fMRI_timeseries, EEG_timeseries, HRF_resEEG, sampling_freq=
             corr_power = np.diagonal(
                 corrcoef2D(fMRI_curr[:, s : uncut - (max_shift - s)], alpha_power_filt)
             )
-            # again: abs before mean>
+
+            # get mean with Fisher transform
             all_corrs_power[:, participant, s] = corr_power
-            mean_power = np.mean(Fisher_transf(corr_power))
+            mean_power = mean_corr(corr_power)
 
             if np.abs(mean_power) > np.abs(mean_power_all[participant]):
                 mean_power_all[participant] = mean_power
@@ -468,6 +472,10 @@ def plot_alpha_corr(all_corrs_reg, all_corrs_power, max_shift):
     """
     Plots heatmaps for correlations over all participants and regions for all time shifts between
     alpha regressor / alpha power band and fMRI.
+    arguments:
+        all_corrs_reg: correlations (regressor-fMRI) for all regions, participants and shift
+        all_corrs_power: correlations (powerband-fMRI) for all regions, participants and shift
+        max_shift: length difference between alpha component and fMRI signal
     """
     min = np.min((np.min(all_corrs_reg), np.min(all_corrs_power)))
     max = np.max((np.max(all_corrs_reg), np.max(all_corrs_power)))
@@ -488,3 +496,56 @@ def plot_alpha_corr(all_corrs_reg, all_corrs_power, max_shift):
         )
         plt.savefig(f"../results/sanity_checks/corr_all_regions_powerband.png")
         plt.show()
+
+
+def alpha_corrs_on_graph(Gs, all_corrs_reg, all_corrs_power, ex_participant):
+    """
+    Plot correlation EEG between alpha component and fMRI on regions in graph.
+    arguments:
+        Gs: list with graph for each participant
+        all_corrs_reg: correlations (regressor-fMRI) for all regions, participants and shift
+        all_corrs_power: correlations (powerband-fMRI) for all regions, participants and shift
+        ex_participant: example participant index
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), subplot_kw=dict(projection="3d"))
+
+    # indices for min correlation
+    mean_power_reg = mean_corr(all_corrs_reg[:, ex_participant, :], 0)
+    shift_idx_reg = np.argmin(mean_power_reg)
+
+    mean_power_power = mean_corr(all_corrs_power[:, ex_participant, :], 0)
+    shift_idx_power = np.argmin(mean_power_power)
+
+    regs = all_corrs_reg[:, ex_participant, shift_idx_reg]
+    powerband = all_corrs_power[:, ex_participant, shift_idx_power]
+
+    # plot
+    Gs[ex_participant].plot_signal(
+        regs,
+        vertex_size=30,
+        show_edges=True,
+        ax=axes[0],
+        colorbar=True,
+    )
+    axes[0].set_title(f"alpha regressor")
+    axes[0].set_xticklabels([])
+    axes[0].set_yticklabels([])
+    axes[0].set_zticklabels([])
+
+    Gs[ex_participant].plot_signal(
+        powerband,
+        vertex_size=30,
+        show_edges=True,
+        ax=axes[1],
+        colorbar=True,
+    )
+    axes[1].set_title(f"alpha band power")
+    axes[1].set_xticklabels([])
+    axes[1].set_yticklabels([])
+    axes[1].set_zticklabels([])
+    plt.suptitle(
+        f"fMRI - EEG alpha component correlations\nfor participant {ex_participant + 1}"
+    )
+    fig.tight_layout()
+    plt.savefig(f"../results/sanity_checks/corr_on_graph_{ex_participant+1}.png")
+    plt.show()
